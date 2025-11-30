@@ -10,6 +10,9 @@
 
     <!-- Babel for translating React code in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- PDF Generation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <!-- Import Map to tell the browser where to find React and Icons -->
     <script type="importmap">
@@ -62,7 +65,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee } from 'lucide-react';
+        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf } from 'lucide-react';
 
         const TruckLoadPlanner = () => {
             // --- CONFIGURATION ---
@@ -106,6 +109,11 @@
             const [expenseCategory, setExpenseCategory] = useState('Labour');
             const [expenseAmount, setExpenseAmount] = useState('');
             const [expenseNote, setExpenseNote] = useState('');
+            
+            // TEMP EXPENSES FOR MODAL
+            const [tempExpenses, setTempExpenses] = useState([]);
+            const [tempExpenseCategory, setTempExpenseCategory] = useState('Transport');
+            const [tempExpenseAmount, setTempExpenseAmount] = useState('');
 
             // REPORT GENERATION STATE
             const [showReportModal, setShowReportModal] = useState(false); // For Daily Report
@@ -154,7 +162,6 @@
                 if (loadedExpenses) {
                     try {
                         const parsed = JSON.parse(loadedExpenses);
-                        // Ensure sorted
                         parsed.sort((a, b) => b.timestamp - a.timestamp);
                         setExpenses(parsed);
                     } catch (e) {
@@ -337,15 +344,14 @@
                 return { totalBoxes, summary };
             };
 
-            // MEMOIZED TOTALS - UPDATED FOR BOXES + LOOSE KG
+            // MEMOIZED TOTALS
             const stockTotals = useMemo(() => {
                 let purchased = 0;
                 let sold = 0;
-                // Structure: { ItemName: { in: { boxes: 0, loose: 0 }, out: { boxes: 0, loose: 0 } } }
                 const itemStats = {}; 
 
                 savedTrips.forEach(t => {
-                    const mode = t.operationMode; // 'Purchase' or 'Sales'
+                    const mode = t.operationMode; 
                     const boxes = Number(t.totalBoxes) || 0;
 
                     if (mode === 'Purchase') purchased += boxes;
@@ -359,7 +365,6 @@
                     };
 
                     if (t.detailedItems && Array.isArray(t.detailedItems)) {
-                        // Use detailed breakdown if available (Direct Entry)
                         t.detailedItems.forEach(item => {
                             const cleanItem = item.name.trim();
                             ensureItem(cleanItem);
@@ -375,7 +380,6 @@
                             }
                         });
                     } else if (t.summary) {
-                        // Fallback to summary (Visualizer/Legacy - Boxes only)
                         Object.keys(t.summary).forEach(item => {
                             const cleanItem = item.trim();
                             ensureItem(cleanItem);
@@ -392,7 +396,7 @@
                 return { purchased, sold, balance: purchased - sold, itemStats };
             }, [savedTrips]);
 
-            // Helper to render Qty Cell (Box + Loose)
+            // Helper to render Qty Cell
             const renderQtyCell = (boxes, loose, colorClass) => {
                 if (!boxes && !loose) return <span className="text-gray-300">-</span>;
                 return (
@@ -475,7 +479,7 @@
                 
                 try {
                     localStorage.removeItem('var_truck_trips');
-                    localStorage.removeItem('var_truck_expenses'); // Also clear expenses
+                    localStorage.removeItem('var_truck_expenses'); 
                     setSavedTrips([]);
                     setExpenses([]);
                     setExpandedTripId(null);
@@ -488,24 +492,20 @@
                 }
             };
 
-            // --- EXPENSE MANAGEMENT ---
+            // --- EXPENSE MANAGEMENT (GLOBAL & TRIP LINKED) ---
             const addExpense = () => {
                 if (!expenseAmount) return;
-                
                 const newExpense = {
                     id: Date.now(),
                     timestamp: Date.now(),
-                    date: reportDate, // Linked to the daily report date picker
+                    date: reportDate, 
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote
                 };
-
                 const updatedExpenses = [newExpense, ...expenses];
                 setExpenses(updatedExpenses);
                 localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
-                
-                // Reset form but keep category for convenience
                 setExpenseAmount('');
                 setExpenseNote('');
             };
@@ -519,6 +519,21 @@
             }
 
             // --- DIRECT ENTRY & EDITING ACTIONS ---
+            // Trip Expense Helpers
+            const addTempExpense = () => {
+                if(!tempExpenseAmount) return;
+                setTempExpenses([...tempExpenses, {
+                    id: Date.now(),
+                    category: tempExpenseCategory,
+                    amount: parseFloat(tempExpenseAmount)
+                }]);
+                setTempExpenseAmount('');
+            };
+
+            const removeTempExpense = (id) => {
+                setTempExpenses(tempExpenses.filter(e => e.id !== id));
+            };
+
             const addItemToDirect = () => {
                 if (!newItemName || !newItemBoxes) return;
                 const boxes = parseInt(newItemBoxes) || 0;
@@ -529,7 +544,7 @@
                     ...directData,
                     items: [...directData.items, { 
                         name: newItemName, 
-                        count: boxes, // Storing boxes in count for compatibility
+                        count: boxes, 
                         boxes: boxes,
                         looseKg: loose,
                         totalWeight: totalWeight
@@ -554,6 +569,10 @@
                     looseKg: 0, 
                     totalWeight: count * 35 
                 }));
+
+                // Fetch existing expenses linked to this trip
+                const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
+                setTempExpenses(linkedExpenses);
 
                 setDirectData({
                     date: trip.tripDate,
@@ -582,8 +601,9 @@
                     summary[cleanName] = (summary[cleanName] || 0) + qty;
                 });
 
+                const recordId = editingTripId || Date.now();
                 const newRecord = {
-                    id: editingTripId || Date.now(),
+                    id: recordId,
                     timestamp: editingTripId ? savedTrips.find(t => t.id === editingTripId)?.timestamp : Date.now(),
                     tripDate: directData.date,
                     operationMode: directData.mode,
@@ -595,6 +615,19 @@
                     isDirectEntry: true, 
                     driverName: directData.driverName || 'Direct Entry'
                 };
+
+                // Handle Expenses Logic
+                const otherExpenses = expenses.filter(e => e.tripId !== recordId);
+                const currentTripExpenses = tempExpenses.map(e => ({
+                    ...e,
+                    tripId: recordId,
+                    date: directData.date, 
+                    timestamp: e.timestamp || Date.now()
+                }));
+                const updatedExpensesList = [...otherExpenses, ...currentTripExpenses];
+                setExpenses(updatedExpensesList);
+                localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpensesList));
+
 
                 let updatedTrips;
                 if (editingTripId) {
@@ -633,13 +666,18 @@
                 setShowDirectEntry(false);
                 setEditingTripId(null);
                 setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
+                setTempExpenses([]); 
             };
 
             const deleteTrip = (id) => {
-                if(window.confirm("Delete this record?")) {
-                    const updated = savedTrips.filter(t => t.id !== id);
-                    setSavedTrips(updated);
-                    localStorage.setItem('var_truck_trips', JSON.stringify(updated));
+                if(window.confirm("Delete this record? This will also delete associated expenses.")) {
+                    const updatedTrips = savedTrips.filter(t => t.id !== id);
+                    setSavedTrips(updatedTrips);
+                    localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
+
+                    const updatedExpenses = expenses.filter(e => e.tripId !== id);
+                    setExpenses(updatedExpenses);
+                    localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
                 }
             };
 
@@ -659,25 +697,38 @@
                 a.href = url; a.download = `var_truck_records_${new Date().toISOString().split('T')[0]}.csv`; a.click();
             };
 
-            // REPORT CAPTURE HANDLER
+            // REPORT CAPTURE HANDLER (UPDATED FOR PDF)
             const handleReportCapture = async () => {
-                if (!window.html2canvas || !reportCaptureRef.current) { 
-                    alert("Loading image tool..."); return; 
+                if (!window.html2canvas || !window.jspdf) { 
+                    alert("Loading PDF tools..."); return; 
                 } 
                 try {
-                    const canvas = await window.html2canvas(reportCaptureRef.current, { 
-                        backgroundColor: '#ffffff', scale: 3, logging: false, useCORS: true 
+                    const { jsPDF } = window.jspdf;
+                    const input = reportCaptureRef.current;
+
+                    // Generate High Quality Canvas
+                    const canvas = await window.html2canvas(input, { 
+                        scale: 3, // High Resolution
+                        logging: false, 
+                        useCORS: true 
                     });
+                    
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgWidth = 210; // A4 width mm
+                    const pageHeight = 297; // A4 height mm
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    // Create PDF with dynamic height if content is long, else A4
+                    const pdf = new jsPDF('p', 'mm', [imgWidth, Math.max(imgHeight, pageHeight)]);
+                    
+                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    
                     if (navigator.share) {
-                        canvas.toBlob(async (blob) => {
-                            const file = new File([blob], `Daily_Report_${reportDate}.png`, { type: "image/png" });
-                            await navigator.share({ files: [file], title: `Daily Report ${reportDate}` });
-                        });
+                        const pdfBlob = pdf.output('blob');
+                        const file = new File([pdfBlob], `Daily_Report_${reportDate}.pdf`, { type: "application/pdf" });
+                        await navigator.share({ files: [file], title: `Daily Report ${reportDate}` });
                     } else {
-                        const link = document.createElement('a');
-                        link.href = canvas.toDataURL('image/png');
-                        link.download = `Daily_Report_${reportDate}.png`;
-                        link.click();
+                        pdf.save(`Daily_Report_${reportDate}.pdf`);
                     }
                 } catch (error) { 
                     console.error(error); alert("Report generation failed"); 
@@ -710,7 +761,6 @@
             };
 
             // DATA PREPARATION FOR REPORT
-            // UPDATED: Now calculates looseKg totals as well
             const getDailyReportStats = (targetDate) => {
                 const purchases = {};
                 const sales = {};
@@ -726,6 +776,7 @@
                 savedTrips.filter(t => t.tripDate === targetDate).forEach(t => {
                     const party = t.customerName || 'Unknown';
                     const mode = t.operationMode;
+                    const tripExpenses = expenses.filter(e => e.tripId === t.id); // Get linked expenses
                     
                     // Normalize items
                     let items = [];
@@ -736,7 +787,6 @@
                             looseKg: Number(i.looseKg) || 0 
                         }));
                     } else if (t.summary) {
-                        // Legacy support
                         items = Object.entries(t.summary).map(([name, count]) => ({ 
                             name, 
                             boxes: Number(count) || 0, 
@@ -747,9 +797,10 @@
                     const targetObj = mode === 'Purchase' ? purchases : sales;
                     
                     if (!targetObj[party]) {
-                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0 };
+                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [] };
                     }
 
+                    // Add Items
                     items.forEach(i => {
                         const existingItem = targetObj[party].items.find(x => x.name === i.name);
                         if (existingItem) {
@@ -760,7 +811,11 @@
                         }
                     });
 
-                    // Totals for this trip
+                    // Add Expenses to this party's block
+                    tripExpenses.forEach(exp => {
+                        targetObj[party].expenses.push(exp);
+                    });
+
                     const tripBoxes = items.reduce((sum, i) => sum + i.boxes, 0);
                     const tripLoose = items.reduce((sum, i) => sum + i.looseKg, 0);
 
@@ -781,7 +836,8 @@
                     sales: Object.values(sales), 
                     totalInBoxes, totalInLoose, 
                     totalOutBoxes, totalOutLoose,
-                    totalExpenseAmount
+                    totalExpenseAmount,
+                    dailyExpenses // Return full list for the footer table
                 };
             };
 
@@ -1095,7 +1151,7 @@
                                     <p className="text-xs text-gray-500 mb-3">Generate a visual report of Purchase vs Sales for a specific day.</p>
                                     <div className="flex gap-2">
                                         <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="border p-2 rounded text-sm flex-1"/>
-                                        <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700">Preview & Snap</button>
+                                        <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center gap-2 justify-center"><FilePdf size={16}/> Download PDF Report</button>
                                     </div>
                                 </div>
 
@@ -1426,100 +1482,151 @@
                                                     
                                                     <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
                                                         {/* REPORT CONTAINER FOR CAPTURE */}
-                                                        <div ref={reportCaptureRef} className="bg-white p-6 w-full max-w-2xl shadow-lg text-sm text-gray-800">
-                                                            <div className="text-center border-b-2 border-gray-300 pb-4 mb-4">
-                                                                <h1 className="text-2xl font-black uppercase text-gray-800">Daily Activity Report</h1>
-                                                                <div className="text-gray-500 font-bold mt-1">{reportDate}</div>
+                                                        {/* Fixed width 800px for desktop-like report on any device */}
+                                                        <div ref={reportCaptureRef} style={{ width: '800px', minWidth: '800px' }} className="bg-white p-8 shadow-lg text-sm text-gray-800 mx-auto">
+                                                            <div className="text-center border-b-2 border-gray-300 pb-6 mb-6">
+                                                                <h1 className="text-3xl font-black uppercase text-gray-900 tracking-wide">Daily Activity Report</h1>
+                                                                <div className="text-gray-500 font-bold mt-2 text-lg">{reportDate}</div>
                                                             </div>
                                                             
                                                             {(() => {
                                                                 const stats = getDailyReportStats(reportDate);
+                                                                const dailyExpenses = stats.dailyExpenses || [];
                                                                 return (
                                                                     <div>
-                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                        <div className="grid grid-cols-2 gap-8 mb-8">
                                                                             {/* LEFT: PURCHASE */}
-                                                                            <div className="flex flex-col border-r border-gray-300 pr-4">
-                                                                                <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase (Inward)</h2>
-                                                                                <div className="space-y-3 flex-1">
-                                                                                    {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
+                                                                            <div className="flex flex-col border-r-2 border-gray-100 pr-6">
+                                                                                <h2 className="text-center font-bold bg-green-100 text-green-800 py-2 mb-4 uppercase text-lg rounded">Purchase (Inward)</h2>
+                                                                                <div className="space-y-4 flex-1">
+                                                                                    {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-10">No purchases recorded</div>}
                                                                                     {stats.purchases.map((p, idx) => (
-                                                                                        <div key={idx} className="border border-gray-200 rounded p-2">
-                                                                                            <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
-                                                                                                <span>{p.name}</span>
-                                                                                                <span className="text-green-700">{p.totalBoxes} Bx <span className="text-[10px] text-gray-400">({p.totalLoose}kg)</span></span>
+                                                                                        <div key={idx} className="border border-gray-200 rounded-lg p-3 shadow-sm bg-gray-50/50">
+                                                                                            <div className="flex justify-between font-bold border-b border-gray-200 pb-2 mb-2 text-base">
+                                                                                                <span className="text-gray-800">{p.name}</span>
+                                                                                                <div className="text-right">
+                                                                                                    <div className="text-green-700">{p.totalBoxes} Bx</div>
+                                                                                                    {p.totalLoose > 0 && <div className="text-xs text-gray-500 font-normal">+{p.totalLoose}kg</div>}
+                                                                                                </div>
                                                                                             </div>
-                                                                                            <div className="space-y-0.5">
+                                                                                            <table className="w-full text-xs">
+                                                                                                <tbody>
                                                                                                 {p.items.map((it, i) => (
-                                                                                                    <div key={i} className="flex justify-between text-xs text-gray-600">
-                                                                                                        <span>{it.name}</span>
-                                                                                                        <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
-                                                                                                    </div>
+                                                                                                    <tr key={i} className="text-gray-600">
+                                                                                                        <td className="py-0.5 font-medium">{it.name}</td>
+                                                                                                        <td className="text-right font-mono">
+                                                                                                            {it.boxes} Bx 
+                                                                                                            {it.looseKg > 0 && <span className="text-gray-400 ml-1">+{it.looseKg}k</span>}
+                                                                                                        </td>
+                                                                                                    </tr>
                                                                                                 ))}
-                                                                                            </div>
+                                                                                                </tbody>
+                                                                                            </table>
                                                                                         </div>
                                                                                     ))}
                                                                                 </div>
-                                                                                <div className="mt-4 pt-2 border-t-2 border-green-200">
-                                                                                    <div className="flex justify-between text-lg font-black text-green-900">
+                                                                                <div className="mt-6 pt-4 border-t-2 border-green-200 bg-green-50 p-3 rounded">
+                                                                                    <div className="flex justify-between text-xl font-black text-green-900 items-end">
                                                                                         <span>Total In:</span>
-                                                                                        <div className="text-right">
+                                                                                        <div className="text-right leading-none">
                                                                                             <div>{stats.totalInBoxes} Boxes</div>
-                                                                                            <div className="text-xs opacity-50">+{stats.totalInLoose} Kg Loose</div>
+                                                                                            {stats.totalInLoose > 0 && <div className="text-sm opacity-60 mt-1">+{stats.totalInLoose} Kg Loose</div>}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
 
                                                                             {/* RIGHT: SALES */}
-                                                                            <div className="flex flex-col pl-4">
-                                                                                <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (Outward)</h2>
-                                                                                <div className="space-y-3 flex-1">
-                                                                                    {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
+                                                                            <div className="flex flex-col pl-2">
+                                                                                <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-2 mb-4 uppercase text-lg rounded">Sales (Outward)</h2>
+                                                                                <div className="space-y-4 flex-1">
+                                                                                    {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-10">No sales recorded</div>}
                                                                                     {stats.sales.map((s, idx) => (
-                                                                                        <div key={idx} className="border border-gray-200 rounded p-2">
-                                                                                            <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
-                                                                                                <span>{s.name}</span>
-                                                                                                <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                        <div key={idx} className="border border-gray-200 rounded-lg p-3 shadow-sm bg-gray-50/50">
+                                                                                            <div className="flex justify-between font-bold border-b border-gray-200 pb-2 mb-2 text-base">
+                                                                                                <span className="text-gray-800">{s.name}</span>
+                                                                                                <div className="text-right">
+                                                                                                    <div className="text-blue-700">{s.totalBoxes} Bx</div>
+                                                                                                    {s.totalLoose > 0 && <div className="text-xs text-gray-500 font-normal">+{s.totalLoose}kg</div>}
+                                                                                                </div>
                                                                                             </div>
-                                                                                            <div className="space-y-0.5">
+                                                                                            <table className="w-full text-xs">
+                                                                                                <tbody>
                                                                                                 {s.items.map((it, i) => (
-                                                                                                    <div key={i} className="flex justify-between text-xs text-gray-600">
-                                                                                                        <span>{it.name}</span>
-                                                                                                        <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
-                                                                                                    </div>
+                                                                                                    <tr key={i} className="text-gray-600">
+                                                                                                        <td className="py-0.5 font-medium">{it.name}</td>
+                                                                                                        <td className="text-right font-mono">
+                                                                                                            {it.boxes} Bx 
+                                                                                                            {it.looseKg > 0 && <span className="text-gray-400 ml-1">+{it.looseKg}k</span>}
+                                                                                                        </td>
+                                                                                                    </tr>
                                                                                                 ))}
-                                                                                            </div>
+                                                                                                </tbody>
+                                                                                            </table>
                                                                                         </div>
                                                                                     ))}
                                                                                 </div>
-                                                                                <div className="mt-4 pt-2 border-t-2 border-blue-200">
-                                                                                    <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                <div className="mt-6 pt-4 border-t-2 border-blue-200 bg-blue-50 p-3 rounded">
+                                                                                    <div className="flex justify-between text-xl font-black text-blue-900 items-end">
                                                                                         <span>Total Out:</span>
-                                                                                        <div className="text-right">
+                                                                                        <div className="text-right leading-none">
                                                                                             <div>{stats.totalOutBoxes} Boxes</div>
-                                                                                            <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                            {stats.totalOutLoose > 0 && <div className="text-sm opacity-60 mt-1">+{stats.totalOutLoose} Kg Loose</div>}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
+
                                                                         {/* FOOTER: EXPENSE SUMMARY */}
-                                                                        <div className="mt-6 border-t-2 border-gray-300 pt-4">
-                                                                            <h2 className="text-center font-bold bg-orange-100 text-orange-800 py-1 mb-2 uppercase">Financial Summary</h2>
-                                                                            <div className="flex justify-between items-center text-sm font-bold text-gray-700 px-4">
-                                                                                <span>Total Expenses:</span>
-                                                                                <span className="text-xl text-orange-600">₹{stats.totalExpenseAmount}</span>
-                                                                            </div>
+                                                                        <div className="mt-8 border-t-4 border-gray-800 pt-6">
+                                                                            <h2 className="text-left font-black text-xl text-gray-800 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                                                                                <span className="bg-orange-500 text-white px-2 py-1 rounded text-sm">₹</span> Expense Report
+                                                                            </h2>
+                                                                            
+                                                                            {dailyExpenses.length > 0 ? (
+                                                                                <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                                                                                    <table className="w-full text-sm">
+                                                                                        <thead className="bg-gray-100 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
+                                                                                            <tr>
+                                                                                                <th className="text-left p-3">Category</th>
+                                                                                                <th className="text-left p-3">Note</th>
+                                                                                                <th className="text-right p-3">Amount</th>
+                                                                                            </tr>
+                                                                                        </thead>
+                                                                                        <tbody className="divide-y divide-gray-200">
+                                                                                            {dailyExpenses.map((exp, i) => (
+                                                                                                <tr key={i}>
+                                                                                                    <td className="p-3 font-bold text-gray-700">{exp.category}</td>
+                                                                                                    <td className="p-3 text-gray-500">{exp.note || '-'}</td>
+                                                                                                    <td className="p-3 text-right font-mono font-bold text-orange-700">₹{exp.amount}</td>
+                                                                                                </tr>
+                                                                                            ))}
+                                                                                        </tbody>
+                                                                                        <tfoot className="bg-orange-50 font-black text-lg text-orange-900 border-t-2 border-orange-200">
+                                                                                            <tr>
+                                                                                                <td colSpan="2" className="p-3 text-right uppercase">Total Expenses</td>
+                                                                                                <td className="p-3 text-right">₹{stats.totalExpenseAmount}</td>
+                                                                                            </tr>
+                                                                                        </tfoot>
+                                                                                    </table>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="p-6 text-center bg-gray-50 rounded border border-gray-200 text-gray-400 italic">No expenses recorded for this date.</div>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 );
                                                             })()}
-                                                            <div className="mt-6 text-center text-xs text-gray-400 italic">Generated by Nellore Truck Loader</div>
+                                                            <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-xs text-gray-400 uppercase tracking-widest">
+                                                                <span>Nellore Truck Loader App</span>
+                                                                <span>Generated: {new Date().toLocaleString()}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     
                                                     <div className="mt-4 flex justify-end gap-2">
-                                                        <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><Camera size={20}/> Snap & Share Report</button>
+                                                        <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download High-Res PDF</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1589,7 +1696,7 @@
                                                 <div className="bg-white w-full max-w-md p-4 rounded-xl animate-slide-up flex flex-col max-h-[90vh] shadow-2xl">
                                                     <div className="flex justify-between items-center mb-4 pb-2 border-b">
                                                         <h3 className="font-bold text-gray-800 flex items-center gap-2"><FilePlus size={20}/> {editingTripId ? "Edit Record" : "Direct Entry"}</h3>
-                                                        <button onClick={() => setShowDirectEntry(false)} className="text-gray-500 p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                                                        <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="text-gray-500 p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
                                                     </div>
 
                                                     <div className="space-y-3 overflow-y-auto flex-1">
@@ -1664,10 +1771,37 @@
                                                                 <div className="text-[10px] text-right text-gray-400 italic">Total: {((parseInt(newItemBoxes)||0)*35 + (parseFloat(newItemLooseKg)||0))} Kg</div>
                                                             </div>
                                                         </div>
+
+                                                        {/* NEW: ASSOCIATED EXPENSES SECTION */}
+                                                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
+                                                            <label className="block text-[10px] font-bold text-orange-800 mb-2 uppercase flex items-center gap-1"><Wallet size={10}/> Associated Expenses</label>
+                                                            
+                                                            {tempExpenses.length > 0 && (
+                                                                <div className="space-y-1 mb-3">
+                                                                    {tempExpenses.map(exp => (
+                                                                        <div key={exp.id} className="flex justify-between items-center bg-white px-2 py-1 rounded border text-xs">
+                                                                            <span className="text-gray-600">{exp.category}</span>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-bold">₹{exp.amount}</span>
+                                                                                <button onClick={() => removeTempExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex gap-2">
+                                                                <select value={tempExpenseCategory} onChange={e => setTempExpenseCategory(e.target.value)} className="border p-1 rounded text-xs bg-white flex-1">
+                                                                    {['Transport', 'Labour', 'Ice', 'Driver Beta', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}
+                                                                </select>
+                                                                <input type="number" value={tempExpenseAmount} onChange={e => setTempExpenseAmount(e.target.value)} className="w-20 border p-1 rounded text-xs" placeholder="Amount"/>
+                                                                <button onClick={addTempExpense} className="bg-orange-500 text-white px-2 rounded hover:bg-orange-600"><Plus size={16}/></button>
+                                                            </div>
+                                                        </div>
                                                     </div>
 
                                                     <div className="mt-4 grid grid-cols-2 gap-3">
-                                                        <button onClick={() => setShowDirectEntry(false)} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel</button>
+                                                        <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel</button>
                                                         <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record" : "Save Record"}</button>
                                                     </div>
                                                     <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel</button>
