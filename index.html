@@ -62,7 +62,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList } from 'lucide-react';
+        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee } from 'lucide-react';
 
         const TruckLoadPlanner = () => {
             // --- CONFIGURATION ---
@@ -100,6 +100,12 @@
             const [visibleRecords, setVisibleRecords] = useState(20); // PAGINATION STATE
             const [selectedItemHistory, setSelectedItemHistory] = useState(null); // ITEM HISTORY VIEW STATE
             const [editingTripId, setEditingTripId] = useState(null); // TRACK EDITING ID
+
+            // EXPENSES STATE
+            const [expenses, setExpenses] = useState([]);
+            const [expenseCategory, setExpenseCategory] = useState('Labour');
+            const [expenseAmount, setExpenseAmount] = useState('');
+            const [expenseNote, setExpenseNote] = useState('');
 
             // REPORT GENERATION STATE
             const [showReportModal, setShowReportModal] = useState(false); // For Daily Report
@@ -140,6 +146,19 @@
                         setSavedTrips(parsed);
                     } catch (e) {
                         console.error("Failed to load trips", e);
+                    }
+                }
+
+                // Load Expenses
+                const loadedExpenses = localStorage.getItem('var_truck_expenses');
+                if (loadedExpenses) {
+                    try {
+                        const parsed = JSON.parse(loadedExpenses);
+                        // Ensure sorted
+                        parsed.sort((a, b) => b.timestamp - a.timestamp);
+                        setExpenses(parsed);
+                    } catch (e) {
+                        console.error("Failed to load expenses", e);
                     }
                 }
             }, []);
@@ -456,7 +475,9 @@
                 
                 try {
                     localStorage.removeItem('var_truck_trips');
+                    localStorage.removeItem('var_truck_expenses'); // Also clear expenses
                     setSavedTrips([]);
+                    setExpenses([]);
                     setExpandedTripId(null);
                     setSelectedItemHistory(null);
                     alert("All History Cleared Successfully.");
@@ -466,6 +487,36 @@
                     alert("Failed to clear data. Please try clearing browser cache.");
                 }
             };
+
+            // --- EXPENSE MANAGEMENT ---
+            const addExpense = () => {
+                if (!expenseAmount) return;
+                
+                const newExpense = {
+                    id: Date.now(),
+                    timestamp: Date.now(),
+                    date: reportDate, // Linked to the daily report date picker
+                    category: expenseCategory,
+                    amount: parseFloat(expenseAmount),
+                    note: expenseNote
+                };
+
+                const updatedExpenses = [newExpense, ...expenses];
+                setExpenses(updatedExpenses);
+                localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
+                
+                // Reset form but keep category for convenience
+                setExpenseAmount('');
+                setExpenseNote('');
+            };
+
+            const deleteExpense = (id) => {
+                if(window.confirm("Delete this expense?")) {
+                    const updated = expenses.filter(e => e.id !== id);
+                    setExpenses(updated);
+                    localStorage.setItem('var_truck_expenses', JSON.stringify(updated));
+                }
+            }
 
             // --- DIRECT ENTRY & EDITING ACTIONS ---
             const addItemToDirect = () => {
@@ -668,6 +719,10 @@
                 let totalOutBoxes = 0;
                 let totalOutLoose = 0;
 
+                // Expenses for this day
+                const dailyExpenses = expenses.filter(e => e.date === targetDate);
+                const totalExpenseAmount = dailyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
                 savedTrips.filter(t => t.tripDate === targetDate).forEach(t => {
                     const party = t.customerName || 'Unknown';
                     const mode = t.operationMode;
@@ -725,7 +780,8 @@
                     purchases: Object.values(purchases), 
                     sales: Object.values(sales), 
                     totalInBoxes, totalInLoose, 
-                    totalOutBoxes, totalOutLoose 
+                    totalOutBoxes, totalOutLoose,
+                    totalExpenseAmount
                 };
             };
 
@@ -1035,15 +1091,78 @@
                             <div className="bg-white p-4 rounded shadow h-full overflow-auto flex flex-col relative">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4"><ImageIcon size={20} className="text-purple-600"/> Daily Activity</h3>
                                 
-                                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm mb-4">
+                                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm mb-6">
                                     <p className="text-xs text-gray-500 mb-3">Generate a visual report of Purchase vs Sales for a specific day.</p>
                                     <div className="flex gap-2">
                                         <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="border p-2 rounded text-sm flex-1"/>
                                         <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700">Preview & Snap</button>
                                     </div>
                                 </div>
-                                <div className="flex-1 flex items-center justify-center text-gray-400 text-sm italic">
-                                    Select a date above to generate the Daily Report.
+
+                                {/* NEW: EXPENSE TRACKER SECTION */}
+                                <div className="p-4 bg-white border-2 border-orange-100 rounded-lg shadow-sm">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-3 text-sm"><Wallet size={16} className="text-orange-500"/> Daily Expenses</h3>
+                                    
+                                    {/* Quick Categories */}
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                        {['Ice', 'Driver Beta', 'Labour', 'Transport', 'Other'].map(cat => (
+                                            <button 
+                                                key={cat} 
+                                                onClick={() => setExpenseCategory(cat)}
+                                                className={`text-xs py-2 px-1 rounded border font-bold ${expenseCategory === cat ? 'bg-orange-500 text-white border-orange-600' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                            >
+                                                {cat}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Input Row */}
+                                    <div className="flex gap-2 mb-4">
+                                        <div className="relative flex-1">
+                                            <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"><IndianRupee size={12}/></div>
+                                            <input 
+                                                type="number" 
+                                                placeholder="Amount" 
+                                                value={expenseAmount}
+                                                onChange={e => setExpenseAmount(e.target.value)}
+                                                className="w-full pl-6 pr-2 py-2 border rounded text-sm font-bold outline-none focus:ring-1 focus:ring-orange-500"
+                                            />
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Note (Optional)" 
+                                            value={expenseNote}
+                                            onChange={e => setExpenseNote(e.target.value)}
+                                            className="flex-1 border rounded px-2 text-xs"
+                                        />
+                                        <button onClick={addExpense} className="bg-orange-500 text-white px-3 rounded font-bold hover:bg-orange-600"><Plus size={18}/></button>
+                                    </div>
+
+                                    {/* Today's Expense List */}
+                                    <div className="border-t pt-2">
+                                        <div className="text-[10px] text-gray-400 font-bold uppercase mb-2">Expenses for {reportDate}</div>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                                            {expenses.filter(e => e.date === reportDate).length === 0 ? (
+                                                <div className="text-center text-xs text-gray-300 italic">No expenses added today</div>
+                                            ) : (
+                                                expenses.filter(e => e.date === reportDate).map(exp => (
+                                                    <div key={exp.id} className="flex justify-between items-center bg-orange-50 p-2 rounded border border-orange-100 text-xs">
+                                                        <div>
+                                                            <div className="font-bold text-gray-700">{exp.category}</div>
+                                                            {exp.note && <div className="text-[10px] text-gray-500">{exp.note}</div>}
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="font-bold text-orange-700">₹{exp.amount}</span>
+                                                            <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        <div className="mt-2 text-right font-bold text-sm text-gray-800">
+                                            Total: ₹{expenses.filter(e => e.date === reportDate).reduce((sum, e) => sum + (e.amount || 0), 0)}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1068,12 +1187,13 @@
                                         
                                         <div className="flex-1 overflow-auto border rounded-lg">
                                             <table className="w-full text-xs text-left">
-                                                <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                                                <thead className="bg-gray-50 text-gray-500 sticky top-0 z-10">
                                                     <tr>
                                                         <th className="p-2">Date</th>
                                                         <th className="p-2">Party</th>
                                                         <th className="p-2 text-right">Qty</th>
                                                         <th className="p-2 text-right">Mode</th>
+                                                        <th className="p-2 text-right">Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1099,6 +1219,12 @@
                                                                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${t.operationMode === 'Purchase' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                                                                             {t.operationMode === 'Purchase' ? 'IN' : 'OUT'}
                                                                         </span>
+                                                                    </td>
+                                                                    <td className="p-2 text-right">
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            <button onClick={(e) => { e.stopPropagation(); openEditRecord(t); }} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Pencil size={14}/></button>
+                                                                            <button onClick={(e) => { e.stopPropagation(); deleteTrip(t.id); }} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={14}/></button>
+                                                                        </div>
                                                                     </td>
                                                                 </tr>
                                                             );
@@ -1309,70 +1435,80 @@
                                                             {(() => {
                                                                 const stats = getDailyReportStats(reportDate);
                                                                 return (
-                                                                    <div className="grid grid-cols-2 gap-4">
-                                                                        {/* LEFT: PURCHASE */}
-                                                                        <div className="flex flex-col border-r border-gray-300 pr-4">
-                                                                            <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase (Inward)</h2>
-                                                                            <div className="space-y-3 flex-1">
-                                                                                {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
-                                                                                {stats.purchases.map((p, idx) => (
-                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
-                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
-                                                                                            <span>{p.name}</span>
-                                                                                            <span className="text-green-700">{p.totalBoxes} Bx <span className="text-[10px] text-gray-400">({p.totalLoose}kg)</span></span>
+                                                                    <div>
+                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                            {/* LEFT: PURCHASE */}
+                                                                            <div className="flex flex-col border-r border-gray-300 pr-4">
+                                                                                <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase (Inward)</h2>
+                                                                                <div className="space-y-3 flex-1">
+                                                                                    {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
+                                                                                    {stats.purchases.map((p, idx) => (
+                                                                                        <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                            <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                                <span>{p.name}</span>
+                                                                                                <span className="text-green-700">{p.totalBoxes} Bx <span className="text-[10px] text-gray-400">({p.totalLoose}kg)</span></span>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                {p.items.map((it, i) => (
+                                                                                                    <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                        <span>{it.name}</span>
+                                                                                                        <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
                                                                                         </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            {p.items.map((it, i) => (
-                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
-                                                                                                    <span>{it.name}</span>
-                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
-                                                                                                </div>
-                                                                                            ))}
+                                                                                    ))}
+                                                                                </div>
+                                                                                <div className="mt-4 pt-2 border-t-2 border-green-200">
+                                                                                    <div className="flex justify-between text-lg font-black text-green-900">
+                                                                                        <span>Total In:</span>
+                                                                                        <div className="text-right">
+                                                                                            <div>{stats.totalInBoxes} Boxes</div>
+                                                                                            <div className="text-xs opacity-50">+{stats.totalInLoose} Kg Loose</div>
                                                                                         </div>
                                                                                     </div>
-                                                                                ))}
+                                                                                </div>
                                                                             </div>
-                                                                            <div className="mt-4 pt-2 border-t-2 border-green-200">
-                                                                                <div className="flex justify-between text-lg font-black text-green-900">
-                                                                                    <span>Total In:</span>
-                                                                                    <div className="text-right">
-                                                                                        <div>{stats.totalInBoxes} Boxes</div>
-                                                                                        <div className="text-xs opacity-50">+{stats.totalInLoose} Kg Loose</div>
+
+                                                                            {/* RIGHT: SALES */}
+                                                                            <div className="flex flex-col pl-4">
+                                                                                <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (Outward)</h2>
+                                                                                <div className="space-y-3 flex-1">
+                                                                                    {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
+                                                                                    {stats.sales.map((s, idx) => (
+                                                                                        <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                            <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                                <span>{s.name}</span>
+                                                                                                <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                {s.items.map((it, i) => (
+                                                                                                    <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                        <span>{it.name}</span>
+                                                                                                        <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                                <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                    <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                        <span>Total Out:</span>
+                                                                                        <div className="text-right">
+                                                                                            <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                            <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-
-                                                                        {/* RIGHT: SALES */}
-                                                                        <div className="flex flex-col pl-4">
-                                                                            <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (Outward)</h2>
-                                                                            <div className="space-y-3 flex-1">
-                                                                                {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
-                                                                                {stats.sales.map((s, idx) => (
-                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
-                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
-                                                                                            <span>{s.name}</span>
-                                                                                            <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
-                                                                                        </div>
-                                                                                        <div className="space-y-0.5">
-                                                                                            {s.items.map((it, i) => (
-                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
-                                                                                                    <span>{it.name}</span>
-                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                            <div className="mt-4 pt-2 border-t-2 border-blue-200">
-                                                                                <div className="flex justify-between text-lg font-black text-blue-900">
-                                                                                    <span>Total Out:</span>
-                                                                                    <div className="text-right">
-                                                                                        <div>{stats.totalOutBoxes} Boxes</div>
-                                                                                        <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
-                                                                                    </div>
-                                                                                </div>
+                                                                        {/* FOOTER: EXPENSE SUMMARY */}
+                                                                        <div className="mt-6 border-t-2 border-gray-300 pt-4">
+                                                                            <h2 className="text-center font-bold bg-orange-100 text-orange-800 py-1 mb-2 uppercase">Financial Summary</h2>
+                                                                            <div className="flex justify-between items-center text-sm font-bold text-gray-700 px-4">
+                                                                                <span>Total Expenses:</span>
+                                                                                <span className="text-xl text-orange-600">₹{stats.totalExpenseAmount}</span>
                                                                             </div>
                                                                         </div>
                                                                     </div>
