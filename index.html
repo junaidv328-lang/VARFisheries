@@ -697,31 +697,45 @@
                 a.href = url; a.download = `var_truck_records_${new Date().toISOString().split('T')[0]}.csv`; a.click();
             };
 
-            // REPORT CAPTURE HANDLER (UPDATED FOR PDF)
+            // UPDATED REPORT CAPTURE HANDLER (FULL CLONE STRATEGY)
             const handleReportCapture = async () => {
                 if (!window.html2canvas || !window.jspdf) { 
                     alert("Loading PDF tools..."); return; 
                 } 
-                try {
-                    const { jsPDF } = window.jspdf;
-                    const input = reportCaptureRef.current;
+                
+                const input = reportCaptureRef.current;
+                if (!input) return;
 
-                    // Generate High Quality Canvas
-                    const canvas = await window.html2canvas(input, { 
-                        scale: 3, // High Resolution
+                try {
+                    // 1. Clone element to ensure fixed desktop width layout
+                    const clone = input.cloneNode(true);
+                    clone.style.width = '1000px'; // Force desktop width for clarity
+                    clone.style.position = 'fixed';
+                    clone.style.top = '-10000px';
+                    clone.style.left = '0';
+                    clone.style.zIndex = '-1';
+                    document.body.appendChild(clone);
+
+                    // 2. Capture high-res canvas
+                    const canvas = await window.html2canvas(clone, { 
+                        scale: 3, // High Res
                         logging: false, 
-                        useCORS: true 
+                        useCORS: true,
+                        windowWidth: 1000
                     });
                     
-                    const imgData = canvas.toDataURL('image/png');
+                    document.body.removeChild(clone);
+
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
                     const imgWidth = 210; // A4 width mm
                     const pageHeight = 297; // A4 height mm
                     const imgHeight = (canvas.height * imgWidth) / canvas.width;
                     
-                    // Create PDF with dynamic height if content is long, else A4
+                    const { jsPDF } = window.jspdf;
+                    // Create PDF that fits the content height exactly
                     const pdf = new jsPDF('p', 'mm', [imgWidth, Math.max(imgHeight, pageHeight)]);
                     
-                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
                     
                     if (navigator.share) {
                         const pdfBlob = pdf.output('blob');
@@ -1482,142 +1496,105 @@
                                                     
                                                     <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
                                                         {/* REPORT CONTAINER FOR CAPTURE */}
-                                                        {/* Fixed width 800px for desktop-like report on any device */}
-                                                        <div ref={reportCaptureRef} style={{ width: '800px', minWidth: '800px' }} className="bg-white p-8 shadow-lg text-sm text-gray-800 mx-auto">
-                                                            <div className="text-center border-b-2 border-gray-300 pb-6 mb-6">
-                                                                <h1 className="text-3xl font-black uppercase text-gray-900 tracking-wide">Daily Activity Report</h1>
-                                                                <div className="text-gray-500 font-bold mt-2 text-lg">{reportDate}</div>
+                                                        <div ref={reportCaptureRef} className="bg-white p-6 w-full max-w-2xl shadow-lg text-sm text-gray-800">
+                                                            <div className="text-center border-b-2 border-gray-300 pb-4 mb-4">
+                                                                <h1 className="text-2xl font-black uppercase text-gray-800">Daily Activity Report</h1>
+                                                                <div className="text-gray-500 font-bold mt-1">{reportDate}</div>
                                                             </div>
                                                             
                                                             {(() => {
                                                                 const stats = getDailyReportStats(reportDate);
-                                                                const dailyExpenses = stats.dailyExpenses || [];
                                                                 return (
-                                                                    <div>
-                                                                        <div className="grid grid-cols-2 gap-8 mb-8">
-                                                                            {/* LEFT: PURCHASE */}
-                                                                            <div className="flex flex-col border-r-2 border-gray-100 pr-6">
-                                                                                <h2 className="text-center font-bold bg-green-100 text-green-800 py-2 mb-4 uppercase text-lg rounded">Purchase (Inward)</h2>
-                                                                                <div className="space-y-4 flex-1">
-                                                                                    {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-10">No purchases recorded</div>}
-                                                                                    {stats.purchases.map((p, idx) => (
-                                                                                        <div key={idx} className="border border-gray-200 rounded-lg p-3 shadow-sm bg-gray-50/50">
-                                                                                            <div className="flex justify-between font-bold border-b border-gray-200 pb-2 mb-2 text-base">
-                                                                                                <span className="text-gray-800">{p.name}</span>
-                                                                                                <div className="text-right">
-                                                                                                    <div className="text-green-700">{p.totalBoxes} Bx</div>
-                                                                                                    {p.totalLoose > 0 && <div className="text-xs text-gray-500 font-normal">+{p.totalLoose}kg</div>}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <table className="w-full text-xs">
-                                                                                                <tbody>
-                                                                                                {p.items.map((it, i) => (
-                                                                                                    <tr key={i} className="text-gray-600">
-                                                                                                        <td className="py-0.5 font-medium">{it.name}</td>
-                                                                                                        <td className="text-right font-mono">
-                                                                                                            {it.boxes} Bx 
-                                                                                                            {it.looseKg > 0 && <span className="text-gray-400 ml-1">+{it.looseKg}k</span>}
-                                                                                                        </td>
-                                                                                                    </tr>
-                                                                                                ))}
-                                                                                                </tbody>
-                                                                                            </table>
+                                                                    <div className="grid grid-cols-2 gap-4">
+                                                                        {/* LEFT: PURCHASE */}
+                                                                        <div className="flex flex-col border-r border-gray-300 pr-4">
+                                                                            <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase (Inward)</h2>
+                                                                            <div className="space-y-3 flex-1">
+                                                                                {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
+                                                                                {stats.purchases.map((p, idx) => (
+                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                            <span>{p.name}</span>
+                                                                                            <span className="text-green-700">{p.totalBoxes} Bx <span className="text-[10px] text-gray-400">({p.totalLoose}kg)</span></span>
                                                                                         </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                                <div className="mt-6 pt-4 border-t-2 border-green-200 bg-green-50 p-3 rounded">
-                                                                                    <div className="flex justify-between text-xl font-black text-green-900 items-end">
-                                                                                        <span>Total In:</span>
-                                                                                        <div className="text-right leading-none">
-                                                                                            <div>{stats.totalInBoxes} Boxes</div>
-                                                                                            {stats.totalInLoose > 0 && <div className="text-sm opacity-60 mt-1">+{stats.totalInLoose} Kg Loose</div>}
+                                                                                        <div className="space-y-0.5">
+                                                                                            {p.items.map((it, i) => (
+                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                    <span>{it.name}</span>
+                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                </div>
+                                                                                            ))}
                                                                                         </div>
                                                                                     </div>
-                                                                                </div>
+                                                                                ))}
                                                                             </div>
-
-                                                                            {/* RIGHT: SALES */}
-                                                                            <div className="flex flex-col pl-2">
-                                                                                <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-2 mb-4 uppercase text-lg rounded">Sales (Outward)</h2>
-                                                                                <div className="space-y-4 flex-1">
-                                                                                    {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-10">No sales recorded</div>}
-                                                                                    {stats.sales.map((s, idx) => (
-                                                                                        <div key={idx} className="border border-gray-200 rounded-lg p-3 shadow-sm bg-gray-50/50">
-                                                                                            <div className="flex justify-between font-bold border-b border-gray-200 pb-2 mb-2 text-base">
-                                                                                                <span className="text-gray-800">{s.name}</span>
-                                                                                                <div className="text-right">
-                                                                                                    <div className="text-blue-700">{s.totalBoxes} Bx</div>
-                                                                                                    {s.totalLoose > 0 && <div className="text-xs text-gray-500 font-normal">+{s.totalLoose}kg</div>}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <table className="w-full text-xs">
-                                                                                                <tbody>
-                                                                                                {s.items.map((it, i) => (
-                                                                                                    <tr key={i} className="text-gray-600">
-                                                                                                        <td className="py-0.5 font-medium">{it.name}</td>
-                                                                                                        <td className="text-right font-mono">
-                                                                                                            {it.boxes} Bx 
-                                                                                                            {it.looseKg > 0 && <span className="text-gray-400 ml-1">+{it.looseKg}k</span>}
-                                                                                                        </td>
-                                                                                                    </tr>
-                                                                                                ))}
-                                                                                                </tbody>
-                                                                                            </table>
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                                <div className="mt-6 pt-4 border-t-2 border-blue-200 bg-blue-50 p-3 rounded">
-                                                                                    <div className="flex justify-between text-xl font-black text-blue-900 items-end">
-                                                                                        <span>Total Out:</span>
-                                                                                        <div className="text-right leading-none">
-                                                                                            <div>{stats.totalOutBoxes} Boxes</div>
-                                                                                            {stats.totalOutLoose > 0 && <div className="text-sm opacity-60 mt-1">+{stats.totalOutLoose} Kg Loose</div>}
-                                                                                        </div>
+                                                                            <div className="mt-4 pt-2 border-t-2 border-green-200">
+                                                                                <div className="flex justify-between text-lg font-black text-green-900">
+                                                                                    <span>Total In:</span>
+                                                                                    <div className="text-right">
+                                                                                        <div>{stats.totalInBoxes} Boxes</div>
+                                                                                        <div className="text-xs opacity-50">+{stats.totalInLoose} Kg Loose</div>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* FOOTER: EXPENSE SUMMARY */}
-                                                                        <div className="mt-8 border-t-4 border-gray-800 pt-6">
-                                                                            <h2 className="text-left font-black text-xl text-gray-800 mb-4 flex items-center gap-2 uppercase tracking-wide">
-                                                                                <span className="bg-orange-500 text-white px-2 py-1 rounded text-sm">₹</span> Expense Report
-                                                                            </h2>
-                                                                            
-                                                                            {dailyExpenses.length > 0 ? (
-                                                                                <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-                                                                                    <table className="w-full text-sm">
-                                                                                        <thead className="bg-gray-100 text-gray-500 uppercase text-xs font-bold border-b border-gray-200">
-                                                                                            <tr>
-                                                                                                <th className="text-left p-3">Category</th>
-                                                                                                <th className="text-left p-3">Note</th>
-                                                                                                <th className="text-right p-3">Amount</th>
-                                                                                            </tr>
-                                                                                        </thead>
-                                                                                        <tbody className="divide-y divide-gray-200">
-                                                                                            {dailyExpenses.map((exp, i) => (
-                                                                                                <tr key={i}>
-                                                                                                    <td className="p-3 font-bold text-gray-700">{exp.category}</td>
-                                                                                                    <td className="p-3 text-gray-500">{exp.note || '-'}</td>
-                                                                                                    <td className="p-3 text-right font-mono font-bold text-orange-700">₹{exp.amount}</td>
-                                                                                                </tr>
+                                                                        {/* RIGHT: SALES */}
+                                                                        <div className="flex flex-col pl-4">
+                                                                            <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (Outward)</h2>
+                                                                            <div className="space-y-3 flex-1">
+                                                                                {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
+                                                                                {stats.sales.map((s, idx) => (
+                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                            <span>{s.name}</span>
+                                                                                            <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            {s.items.map((it, i) => (
+                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                    <span>{it.name}</span>
+                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                </div>
                                                                                             ))}
-                                                                                        </tbody>
-                                                                                        <tfoot className="bg-orange-50 font-black text-lg text-orange-900 border-t-2 border-orange-200">
-                                                                                            <tr>
-                                                                                                <td colSpan="2" className="p-3 text-right uppercase">Total Expenses</td>
-                                                                                                <td className="p-3 text-right">₹{stats.totalExpenseAmount}</td>
-                                                                                            </tr>
-                                                                                        </tfoot>
-                                                                                    </table>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                            <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                    <span>Total Out:</span>
+                                                                                    <div className="text-right">
+                                                                                        <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                        <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                    </div>
                                                                                 </div>
-                                                                            ) : (
-                                                                                <div className="p-6 text-center bg-gray-50 rounded border border-gray-200 text-gray-400 italic">No expenses recorded for this date.</div>
-                                                                            )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 );
                                                             })()}
+                                                            
+                                                            {/* FOOTER: EXPENSE SUMMARY */}
+                                                            <div className="mt-8 border-t-4 border-gray-800 pt-6">
+                                                                <h2 className="text-left font-black text-xl text-gray-800 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                                                                    <span className="bg-orange-500 text-white px-2 py-1 rounded text-sm">₹</span> Expense Report
+                                                                </h2>
+                                                                
+                                                                {getDailyReportStats(reportDate).totalExpenseAmount > 0 ? (
+                                                                    <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                                                                        <tfoot className="bg-orange-50 font-black text-lg text-orange-900 border-t-2 border-orange-200">
+                                                                            <tr>
+                                                                                <td colSpan="2" className="p-3 text-right uppercase">Total Expenses</td>
+                                                                                <td className="p-3 text-right">₹{getDailyReportStats(reportDate).totalExpenseAmount}</td>
+                                                                            </tr>
+                                                                        </tfoot>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="p-6 text-center bg-gray-50 rounded border border-gray-200 text-gray-400 italic">No expenses recorded for this date.</div>
+                                                                )}
+                                                            </div>
+                                                            
                                                             <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-xs text-gray-400 uppercase tracking-widest">
                                                                 <span>Nellore Truck Loader App</span>
                                                                 <span>Generated: {new Date().toLocaleString()}</span>
