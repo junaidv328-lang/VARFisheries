@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nellore Truck Loader</title>
+    <title>Nellore Truck Loader (Cloud)</title>
 
     <!-- Tailwind CSS for Styling -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,18 +14,20 @@
     <!-- PDF Generation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- Import Map to tell the browser where to find React and Icons -->
-   <script type="importmap">
-{
-    "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-        "firebase/app": "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js",
-        "firebase/firestore": "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"
+    <!-- Import Map with Firebase SDKs -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+            "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
+            "firebase/analytics": "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"
+        }
     }
-}
-</script>
+    </script>
 
     <!-- Custom Styles for Animation & Print -->
     <style>
@@ -35,27 +37,19 @@
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
-        /* Scrollbar styling for a cleaner look */
+        /* Scrollbar styling */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #bbb; }
 
-        /* Force scrollbar to be visible in the table container on Mobile */
         .custom-scroll::-webkit-scrollbar {
             -webkit-appearance: none;
-            width: 8px; /* Slightly wider for visibility */
+            width: 8px; 
             display: block;
         }
-        .custom-scroll::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-            border-radius: 4px;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
-            border-radius: 4px;
-            background-color: #9ca3af; /* Gray-400 */
-            border: 2px solid #f1f1f1; /* Padding effect */
-        }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background-color: #9ca3af; border: 2px solid #f1f1f1; }
 
         .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
     </style>
@@ -67,28 +61,31 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf } from 'lucide-react';
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf, Cloud } from 'lucide-react';
+        
+        // --- FIREBASE IMPORTS ---
+        import { initializeApp } from "firebase/app";
+        import { getAnalytics } from "firebase/analytics";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, query, orderBy, writeBatch } from "firebase/firestore";
+        import { getAuth, signInAnonymously } from "firebase/auth";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBbEfjtUfn_nBmvdHY8INwtF4-YUJLNnYY",
-  authDomain: "var-fisheries.firebaseapp.com",
-  projectId: "var-fisheries",
-  storageBucket: "var-fisheries.firebasestorage.app",
-  messagingSenderId: "376492409540",
-  appId: "1:376492409540:web:274476f9fcf0c646ee3f91",
-  measurementId: "G-FJ1C5PMNRR"
-};
+        // --- FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbEfjtUfn_nBmvdHY8INwtF4-YUJLNnYY",
+            authDomain: "var-fisheries.firebaseapp.com",
+            projectId: "var-fisheries",
+            storageBucket: "var-fisheries.firebasestorage.app",
+            messagingSenderId: "376492409540",
+            appId: "1:376492409540:web:274476f9fcf0c646ee3f91",
+            measurementId: "G-FJ1C5PMNRR"
+        };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
         const TruckLoadPlanner = () => {
             // --- CONFIGURATION ---
             const [driverName, setDriverName] = useState('');
@@ -96,7 +93,7 @@ const analytics = getAnalytics(app);
             const [varBoxCount, setVarBoxCount] = useState(''); 
 
             // Operation Mode, Targets & Date
-            const [operationMode, setOperationMode] = useState('Sales'); // 'Sales' or 'Purchase'
+            const [operationMode, setOperationMode] = useState('Sales'); 
             const [referenceId, setReferenceId] = useState(''); 
             const [targetBoxCount, setTargetBoxCount] = useState(''); 
             const [tripDate, setTripDate] = useState(new Date().toISOString().split('T')[0]); 
@@ -119,32 +116,29 @@ const analytics = getAnalytics(app);
             const [showItemStock, setShowItemStock] = useState(true); 
             const captureRef = useRef(null);
 
-            // RECORDS / HISTORY STATE
+            // RECORDS / HISTORY STATE (Managed by Firebase)
             const [savedTrips, setSavedTrips] = useState([]);
             const [expandedTripId, setExpandedTripId] = useState(null);
-            const [visibleRecords, setVisibleRecords] = useState(20); // PAGINATION STATE
-            const [selectedItemHistory, setSelectedItemHistory] = useState(null); // ITEM HISTORY VIEW STATE
-            const [editingTripId, setEditingTripId] = useState(null); // TRACK EDITING ID
+            const [visibleRecords, setVisibleRecords] = useState(20); 
+            const [selectedItemHistory, setSelectedItemHistory] = useState(null); 
+            const [editingTripId, setEditingTripId] = useState(null); 
 
-            // EXPENSES STATE
+            // EXPENSES STATE (Managed by Firebase)
             const [expenses, setExpenses] = useState([]);
             const [expenseCategory, setExpenseCategory] = useState('Labour');
             const [expenseAmount, setExpenseAmount] = useState('');
             const [expenseNote, setExpenseNote] = useState('');
             
-            // TEMP EXPENSES FOR MODAL
             const [tempExpenses, setTempExpenses] = useState([]);
             const [tempExpenseCategory, setTempExpenseCategory] = useState('Transport');
             const [tempExpenseAmount, setTempExpenseAmount] = useState('');
 
-            // REPORT GENERATION STATE
-            const [showReportModal, setShowReportModal] = useState(false); // For Daily Report
-            const [showStockSnapshotModal, setShowStockSnapshotModal] = useState(false); // For Full Stock List
+            const [showReportModal, setShowReportModal] = useState(false);
+            const [showStockSnapshotModal, setShowStockSnapshotModal] = useState(false);
             const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
             const reportCaptureRef = useRef(null);
             const stockCaptureRef = useRef(null);
 
-            // DIRECT ENTRY STATE
             const [showDirectEntry, setShowDirectEntry] = useState(false);
             const [directData, setDirectData] = useState({
                 date: new Date().toISOString().split('T')[0],
@@ -158,8 +152,9 @@ const analytics = getAnalytics(app);
             const [newItemName, setNewItemName] = useState('');
             const [newItemBoxes, setNewItemBoxes] = useState(''); 
             const [newItemLooseKg, setNewItemLooseKg] = useState(''); 
+            const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-            // --- INITIALIZATION & DATA LOADING ---
+            // --- INITIALIZATION & FIREBASE LISTENERS ---
             useEffect(() => {
                 if (!window.html2canvas) {
                     const script = document.createElement('script');
@@ -168,27 +163,31 @@ const analytics = getAnalytics(app);
                     document.body.appendChild(script);
                 }
 
-                const loadedData = localStorage.getItem('var_truck_trips');
-                if (loadedData) {
-                    try {
-                        const parsed = JSON.parse(loadedData);
-                        parsed.sort((a, b) => b.timestamp - a.timestamp);
-                        setSavedTrips(parsed);
-                    } catch (e) {
-                        console.error("Failed to load trips", e);
-                    }
-                }
+                // Handle Auth
+                signInAnonymously(auth).catch((error) => {
+                    console.error("Auth Error", error);
+                });
 
-                // Load Expenses
-                const loadedExpenses = localStorage.getItem('var_truck_expenses');
-                if (loadedExpenses) {
-                    try {
-                        const parsed = JSON.parse(loadedExpenses);
-                        parsed.sort((a, b) => b.timestamp - a.timestamp);
-                        setExpenses(parsed);
-                    } catch (e) {
-                        console.error("Failed to load expenses", e);
-                    }
+                // Listen to TRIPS
+                const tripsQuery = query(collection(db, "var_truck_trips"), orderBy("timestamp", "desc"));
+                const unsubscribeTrips = onSnapshot(tripsQuery, (snapshot) => {
+                    const tripsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    setSavedTrips(tripsData);
+                }, (error) => console.error("Trips Sync Error:", error));
+
+                // Listen to EXPENSES
+                const expensesQuery = query(collection(db, "var_truck_expenses"), orderBy("timestamp", "desc"));
+                const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
+                    const expData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                    setExpenses(expData);
+                }, (error) => console.error("Expenses Sync Error:", error));
+
+                window.addEventListener('online', () => setIsOffline(false));
+                window.addEventListener('offline', () => setIsOffline(true));
+
+                return () => {
+                    unsubscribeTrips();
+                    unsubscribeExpenses();
                 }
             }, []);
 
@@ -464,13 +463,17 @@ const analytics = getAnalytics(app);
                 return manifest;
             };
 
-            // --- DATA ACTIONS (LOCAL STORAGE) ---
-            const saveTrip = () => {
+            // --- FIREBASE ACTIONS (ASYNC) ---
+            const saveTrip = async () => {
                 const { totalBoxes, summary } = getManifestData();
                 if (totalBoxes === 0) return alert("Cannot save empty trip");
 
-                const newTrip = {
-                    id: Date.now(),
+                // Convert summary to detailedItems format for consistency
+                const detailedItems = Object.entries(summary).map(([name, count]) => ({
+                    name, boxes: count, looseKg: 0, totalWeight: count * 35
+                }));
+
+                const newTripData = {
                     timestamp: Date.now(),
                     tripDate,
                     operationMode,
@@ -481,71 +484,78 @@ const analytics = getAnalytics(app);
                     varBoxCount,
                     totalBoxes,
                     summary,
+                    detailedItems, // Add this so logic is consistent
                     isDirectEntry: false 
                 };
 
-                const updatedTrips = [newTrip, ...savedTrips];
-                setSavedTrips(updatedTrips);
-                localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
-                
-                if(window.confirm("Trip Saved locally! Start a new load?")) {
-                    resetGrid();
+                try {
+                    await addDoc(collection(db, "var_truck_trips"), newTripData);
+                    alert("Trip Saved to Cloud!");
+                    if(window.confirm("Start new load?")) resetGrid();
+                } catch (e) {
+                    alert("Error saving: " + e.message);
                 }
             };
 
-             // Clear All Local Data Function
-             const clearAllLocalData = () => {
-                if (!window.confirm("DANGER: This will delete ALL saved history (Sales & Purchases) from this device. This cannot be undone.")) return;
-
-                if (!window.confirm("Are you absolutely sure you want to delete all records?")) return;
+             // Clear All Local Data Function (FIREBASE BATCH DELETE)
+             const clearAllLocalData = async () => {
+                if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
+                if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
                 
                 try {
-                    localStorage.removeItem('var_truck_trips');
-                    localStorage.removeItem('var_truck_expenses'); 
-                    setSavedTrips([]);
-                    setExpenses([]);
-                    setExpandedTripId(null);
-                    setSelectedItemHistory(null);
-                    alert("All History Cleared Successfully.");
+                    const batch = writeBatch(db);
+                    // Add trips to delete
+                    savedTrips.forEach(trip => {
+                        batch.delete(doc(db, "var_truck_trips", trip.id));
+                    });
+                    // Add expenses to delete
+                    expenses.forEach(exp => {
+                        batch.delete(doc(db, "var_truck_expenses", exp.id));
+                    });
+
+                    await batch.commit();
+                    alert("Cloud Database Cleared.");
                     setActiveTab('records');
                 } catch (e) {
                     console.error("Clear failed", e);
-                    alert("Failed to clear data. Please try clearing browser cache.");
+                    alert("Failed to clear cloud data. " + e.message);
                 }
             };
 
-            // --- EXPENSE MANAGEMENT (GLOBAL & TRIP LINKED) ---
-            const addExpense = () => {
+            // --- EXPENSE MANAGEMENT (FIREBASE) ---
+            const addExpense = async () => {
                 if (!expenseAmount) return;
                 const newExpense = {
-                    id: Date.now(),
                     timestamp: Date.now(),
                     date: reportDate, 
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote
                 };
-                const updatedExpenses = [newExpense, ...expenses];
-                setExpenses(updatedExpenses);
-                localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
-                setExpenseAmount('');
-                setExpenseNote('');
+                try {
+                    await addDoc(collection(db, "var_truck_expenses"), newExpense);
+                    setExpenseAmount('');
+                    setExpenseNote('');
+                } catch (e) {
+                    alert("Error adding expense: " + e.message);
+                }
             };
 
-            const deleteExpense = (id) => {
+            const deleteExpense = async (id) => {
                 if(window.confirm("Delete this expense?")) {
-                    const updated = expenses.filter(e => e.id !== id);
-                    setExpenses(updated);
-                    localStorage.setItem('var_truck_expenses', JSON.stringify(updated));
+                    try {
+                        await deleteDoc(doc(db, "var_truck_expenses", id));
+                    } catch (e) {
+                        alert("Error deleting: " + e.message);
+                    }
                 }
             }
 
             // --- DIRECT ENTRY & EDITING ACTIONS ---
-            // Trip Expense Helpers
             const addTempExpense = () => {
                 if(!tempExpenseAmount) return;
                 setTempExpenses([...tempExpenses, {
-                    id: Date.now(),
+                    id: Date.now(), // Temporary local ID
                     category: tempExpenseCategory,
                     amount: parseFloat(tempExpenseAmount)
                 }]);
@@ -608,7 +618,7 @@ const analytics = getAnalytics(app);
                 setShowDirectEntry(true);
             };
 
-            const handleDirectSave = (shouldDownload) => {
+            const handleDirectSave = async (shouldDownload) => {
 
                 if (directData.items.length === 0) return alert("Add at least one item");
                 if (!directData.partyName) return alert("Enter Party Name");
@@ -623,9 +633,7 @@ const analytics = getAnalytics(app);
                     summary[cleanName] = (summary[cleanName] || 0) + qty;
                 });
 
-                const recordId = editingTripId || Date.now();
-                const newRecord = {
-                    id: recordId,
+                const tripData = {
                     timestamp: editingTripId ? savedTrips.find(t => t.id === editingTripId)?.timestamp : Date.now(),
                     tripDate: directData.date,
                     operationMode: directData.mode,
@@ -638,68 +646,96 @@ const analytics = getAnalytics(app);
                     driverName: directData.driverName || 'Direct Entry'
                 };
 
-                // Handle Expenses Logic
-                const otherExpenses = expenses.filter(e => e.tripId !== recordId);
-                const currentTripExpenses = tempExpenses.map(e => ({
-                    ...e,
-                    tripId: recordId,
-                    date: directData.date, 
-                    timestamp: e.timestamp || Date.now()
-                }));
-                const updatedExpensesList = [...otherExpenses, ...currentTripExpenses];
-                setExpenses(updatedExpensesList);
-                localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpensesList));
+                try {
+                    let tripRef;
+                    if (editingTripId) {
+                        tripRef = doc(db, "var_truck_trips", editingTripId);
+                        await setDoc(tripRef, tripData);
+                    } else {
+                        tripRef = await addDoc(collection(db, "var_truck_trips"), tripData);
+                    }
+                    
+                    const tripId = tripRef.id;
 
+                    // Handle Expenses (Add new ones linked to trip)
+                    // Note: We are not editing existing expenses here for simplicity, just adding new "temp" ones
+                    // A full solution would diff expenses, but appending is safer for now.
+                    const batch = writeBatch(db);
+                    // Filter temp expenses that don't have a real firebase ID yet (id > 10000000000 is usually Date.now())
+                    // Actually, since tempExpenses comes from state, if it was loaded from existing, it has string ID.
+                    
+                    // Strategy: Delete old expenses for this trip and re-add all current temp expenses
+                    // 1. Find expenses currently in DB for this trip
+                    const oldTripExpenses = expenses.filter(e => e.tripId === tripId);
+                    oldTripExpenses.forEach(e => {
+                        batch.delete(doc(db, "var_truck_expenses", e.id));
+                    });
 
-                let updatedTrips;
-                if (editingTripId) {
-                    updatedTrips = savedTrips.map(t => t.id === editingTripId ? newRecord : t);
-                    alert("Record Updated!");
-                } else {
-                    updatedTrips = [newRecord, ...savedTrips];
-                    if(!shouldDownload) alert("Record Saved!");
+                    // 2. Add all from tempExpenses
+                    tempExpenses.forEach(exp => {
+                        const newExpRef = doc(collection(db, "var_truck_expenses"));
+                        batch.set(newExpRef, {
+                            timestamp: Date.now(),
+                            date: directData.date,
+                            category: exp.category,
+                            amount: exp.amount,
+                            tripId: tripId // Link to trip
+                        });
+                    });
+                    
+                    await batch.commit();
+                    
+                    alert(editingTripId ? "Record Updated!" : "Record Saved!");
+
+                    if (shouldDownload) {
+                        const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg"];
+                        const rows = directData.items.map(item => [
+                            directData.date,
+                            directData.mode,
+                            directData.partyName,
+                            directData.refId || '-',
+                            item.name,
+                            item.boxes,
+                            item.looseKg || 0,
+                            item.totalWeight || (item.boxes * 35)
+                        ].join(","));
+
+                        const csvContent = [headers.join(","), ...rows].join("\n");
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Record_${directData.partyName}_${directData.date}.csv`;
+                        a.click();
+                    }
+
+                    setShowDirectEntry(false);
+                    setEditingTripId(null);
+                    setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
+                    setTempExpenses([]);
+
+                } catch (e) {
+                    alert("Error saving record: " + e.message);
                 }
-
-                setSavedTrips(updatedTrips);
-                localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
-
-                if (shouldDownload) {
-                    const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg"];
-                    const rows = directData.items.map(item => [
-                        directData.date,
-                        directData.mode,
-                        directData.partyName,
-                        directData.refId || '-',
-                        item.name,
-                        item.boxes,
-                        item.looseKg || 0,
-                        item.totalWeight || (item.boxes * 35)
-                    ].join(","));
-
-                    const csvContent = [headers.join(","), ...rows].join("\n");
-                    const blob = new Blob([csvContent], { type: 'text/csv' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `Record_${directData.partyName}_${directData.date}.csv`;
-                    a.click();
-                }
-
-                setShowDirectEntry(false);
-                setEditingTripId(null);
-                setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
-                setTempExpenses([]); 
             };
 
-            const deleteTrip = (id) => {
+            const deleteTrip = async (id) => {
                 if(window.confirm("Delete this record? This will also delete associated expenses.")) {
-                    const updatedTrips = savedTrips.filter(t => t.id !== id);
-                    setSavedTrips(updatedTrips);
-                    localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
+                    try {
+                        // Delete trip
+                        await deleteDoc(doc(db, "var_truck_trips", id));
+                        
+                        // Find associated expenses and delete them
+                        const linkedExpenses = expenses.filter(e => e.tripId === id);
+                        const batch = writeBatch(db);
+                        linkedExpenses.forEach(e => {
+                            batch.delete(doc(db, "var_truck_expenses", e.id));
+                        });
+                        await batch.commit();
 
-                    const updatedExpenses = expenses.filter(e => e.tripId !== id);
-                    setExpenses(updatedExpenses);
-                    localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
+                    } catch (e) {
+                        alert("Error deleting: " + e.message);
+                    }
                 }
             };
 
@@ -719,7 +755,7 @@ const analytics = getAnalytics(app);
                 a.href = url; a.download = `var_truck_records_${new Date().toISOString().split('T')[0]}.csv`; a.click();
             };
 
-            // UPDATED REPORT CAPTURE HANDLER (FULL CLONE STRATEGY)
+            // REPORT CAPTURE HANDLER
             const handleReportCapture = async () => {
                 if (!window.html2canvas || !window.jspdf) { 
                     alert("Loading PDF tools..."); return; 
@@ -729,18 +765,16 @@ const analytics = getAnalytics(app);
                 if (!input) return;
 
                 try {
-                    // 1. Clone element to ensure fixed desktop width layout
                     const clone = input.cloneNode(true);
-                    clone.style.width = '1000px'; // Force desktop width for clarity
+                    clone.style.width = '1000px'; 
                     clone.style.position = 'fixed';
                     clone.style.top = '-10000px';
                     clone.style.left = '0';
                     clone.style.zIndex = '-1';
                     document.body.appendChild(clone);
 
-                    // 2. Capture high-res canvas
                     const canvas = await window.html2canvas(clone, { 
-                        scale: 3, // High Res
+                        scale: 3, 
                         logging: false, 
                         useCORS: true,
                         windowWidth: 1000
@@ -749,12 +783,11 @@ const analytics = getAnalytics(app);
                     document.body.removeChild(clone);
 
                     const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                    const imgWidth = 210; // A4 width mm
-                    const pageHeight = 297; // A4 height mm
+                    const imgWidth = 210; 
+                    const pageHeight = 297; 
                     const imgHeight = (canvas.height * imgWidth) / canvas.width;
                     
                     const { jsPDF } = window.jspdf;
-                    // Create PDF that fits the content height exactly
                     const pdf = new jsPDF('p', 'mm', [imgWidth, Math.max(imgHeight, pageHeight)]);
                     
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
@@ -805,16 +838,14 @@ const analytics = getAnalytics(app);
                 let totalOutBoxes = 0;
                 let totalOutLoose = 0;
 
-                // Expenses for this day
                 const dailyExpenses = expenses.filter(e => e.date === targetDate);
                 const totalExpenseAmount = dailyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
                 savedTrips.filter(t => t.tripDate === targetDate).forEach(t => {
                     const party = t.customerName || 'Unknown';
                     const mode = t.operationMode;
-                    const tripExpenses = expenses.filter(e => e.tripId === t.id); // Get linked expenses
+                    const tripExpenses = expenses.filter(e => e.tripId === t.id); 
                     
-                    // Normalize items
                     let items = [];
                     if (t.detailedItems) {
                         items = t.detailedItems.map(i => ({
@@ -836,7 +867,6 @@ const analytics = getAnalytics(app);
                         targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [] };
                     }
 
-                    // Add Items
                     items.forEach(i => {
                         const existingItem = targetObj[party].items.find(x => x.name === i.name);
                         if (existingItem) {
@@ -847,7 +877,6 @@ const analytics = getAnalytics(app);
                         }
                     });
 
-                    // Add Expenses to this party's block
                     tripExpenses.forEach(exp => {
                         targetObj[party].expenses.push(exp);
                     });
@@ -873,7 +902,7 @@ const analytics = getAnalytics(app);
                     totalInBoxes, totalInLoose, 
                     totalOutBoxes, totalOutLoose,
                     totalExpenseAmount,
-                    dailyExpenses // Return full list for the footer table
+                    dailyExpenses 
                 };
             };
 
@@ -1079,8 +1108,8 @@ const analytics = getAnalytics(app);
                             <div><h1 className="font-bold text-lg leading-tight">VAR Load Planner</h1><div className="flex flex-col leading-none"><span className="text-xs text-white/80 font-bold uppercase tracking-widest">{operationMode}</span></div></div>
                         </div>
                         <div className="text-right text-xs">
-                            <div className="uppercase font-bold text-white/60">Hybrid Mode</div>
-                            <div className="flex items-center justify-end gap-1 text-gray-300"><HardDrive size={10}/> Local</div>
+                            <div className="uppercase font-bold text-white/60">Cloud Mode</div>
+                            <div className={`flex items-center justify-end gap-1 ${isOffline ? 'text-red-300' : 'text-green-300'}`}><Cloud size={10}/> {isOffline ? 'Offline' : 'Connected'}</div>
                         </div>
                     </div>
 
@@ -1907,5 +1936,3 @@ const analytics = getAnalytics(app);
     </script>
 </body>
 </html>
-
-
