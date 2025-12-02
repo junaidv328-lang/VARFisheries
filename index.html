@@ -66,7 +66,7 @@
         // --- FIREBASE IMPORTS ---
         import { initializeApp } from "firebase/app";
         import { getAnalytics } from "firebase/analytics";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, query, orderBy, writeBatch } from "firebase/firestore";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, query, orderBy, writeBatch, getDocs, where } from "firebase/firestore";
         import { getAuth, signInAnonymously } from "firebase/auth";
 
         // --- FIREBASE CONFIGURATION ---
@@ -463,7 +463,7 @@
                 return manifest;
             };
 
-            // --- FIREBASE ACTIONS (ASYNC) ---
+            // --- FIREBASE ACTIONS (TRUCK LOAD) ---
             const saveTrip = async () => {
                 const { totalBoxes, summary } = getManifestData();
                 if (totalBoxes === 0) return alert("Cannot save empty trip");
@@ -484,7 +484,7 @@
                     varBoxCount,
                     totalBoxes,
                     summary,
-                    detailedItems, // Add this so logic is consistent
+                    detailedItems, 
                     isDirectEntry: false 
                 };
 
@@ -497,21 +497,20 @@
                 }
             };
 
-             // Clear All Local Data Function (FIREBASE BATCH DELETE)
+             // Clear All Cloud Data Function (FIREBASE BATCH DELETE)
              const clearAllLocalData = async () => {
                 if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
                 if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
                 
                 try {
                     const batch = writeBatch(db);
-                    // Add trips to delete
-                    savedTrips.forEach(trip => {
-                        batch.delete(doc(db, "var_truck_trips", trip.id));
-                    });
-                    // Add expenses to delete
-                    expenses.forEach(exp => {
-                        batch.delete(doc(db, "var_truck_expenses", exp.id));
-                    });
+                    
+                    // Must check batch limit (500). If more, we'd need loops. For now assuming < 500 docs active.
+                    const tripsSnapshot = await getDocs(collection(db, "var_truck_trips"));
+                    tripsSnapshot.forEach(doc => batch.delete(doc.ref));
+
+                    const expSnapshot = await getDocs(collection(db, "var_truck_expenses"));
+                    expSnapshot.forEach(doc => batch.delete(doc.ref));
 
                     await batch.commit();
                     alert("Cloud Database Cleared.");
@@ -593,7 +592,7 @@
                 setDirectData({...directData, items: newItems});
             };
 
-            const openEditRecord = (trip) => {
+            const openEditRecord = async (trip) => {
                 const itemsList = trip.detailedItems || Object.entries(trip.summary || {}).map(([name, count]) => ({ 
                     name, 
                     count, 
@@ -602,7 +601,8 @@
                     totalWeight: count * 35 
                 }));
 
-                // Fetch existing expenses linked to this trip
+                // Fetch existing expenses linked to this trip from Firestore
+                // Note: expenses state is already synced via onSnapshot
                 const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
                 setTempExpenses(linkedExpenses);
 
@@ -634,6 +634,7 @@
                 });
 
                 const tripData = {
+                    // Keep original timestamp if editing to maintain sort order
                     timestamp: editingTripId ? savedTrips.find(t => t.id === editingTripId)?.timestamp : Date.now(),
                     tripDate: directData.date,
                     operationMode: directData.mode,
@@ -647,31 +648,29 @@
                 };
 
                 try {
-                    let tripRef;
+                    let tripId;
+                    
+                    // 1. Save/Update Trip
                     if (editingTripId) {
-                        tripRef = doc(db, "var_truck_trips", editingTripId);
-                        await setDoc(tripRef, tripData);
+                        tripId = editingTripId;
+                        await setDoc(doc(db, "var_truck_trips", tripId), tripData);
                     } else {
-                        tripRef = await addDoc(collection(db, "var_truck_trips"), tripData);
+                        const docRef = await addDoc(collection(db, "var_truck_trips"), tripData);
+                        tripId = docRef.id;
                     }
-                    
-                    const tripId = tripRef.id;
 
-                    // Handle Expenses (Add new ones linked to trip)
-                    // Note: We are not editing existing expenses here for simplicity, just adding new "temp" ones
-                    // A full solution would diff expenses, but appending is safer for now.
+                    // 2. Handle Linked Expenses
+                    // We delete all old expenses for this trip and re-create them to ensure sync
+                    // (A bit inefficient but safe for simplicity)
                     const batch = writeBatch(db);
-                    // Filter temp expenses that don't have a real firebase ID yet (id > 10000000000 is usually Date.now())
-                    // Actually, since tempExpenses comes from state, if it was loaded from existing, it has string ID.
                     
-                    // Strategy: Delete old expenses for this trip and re-add all current temp expenses
-                    // 1. Find expenses currently in DB for this trip
+                    // Find expenses currently in DB for this trip and delete them from batch
                     const oldTripExpenses = expenses.filter(e => e.tripId === tripId);
                     oldTripExpenses.forEach(e => {
                         batch.delete(doc(db, "var_truck_expenses", e.id));
                     });
 
-                    // 2. Add all from tempExpenses
+                    // Add all current tempExpenses to batch
                     tempExpenses.forEach(exp => {
                         const newExpRef = doc(collection(db, "var_truck_expenses"));
                         batch.set(newExpRef, {
@@ -715,6 +714,7 @@
                     setTempExpenses([]);
 
                 } catch (e) {
+                    console.error(e);
                     alert("Error saving record: " + e.message);
                 }
             };
@@ -722,17 +722,18 @@
             const deleteTrip = async (id) => {
                 if(window.confirm("Delete this record? This will also delete associated expenses.")) {
                     try {
+                        const batch = writeBatch(db);
+                        
                         // Delete trip
-                        await deleteDoc(doc(db, "var_truck_trips", id));
+                        batch.delete(doc(db, "var_truck_trips", id));
                         
                         // Find associated expenses and delete them
                         const linkedExpenses = expenses.filter(e => e.tripId === id);
-                        const batch = writeBatch(db);
                         linkedExpenses.forEach(e => {
                             batch.delete(doc(db, "var_truck_expenses", e.id));
                         });
+                        
                         await batch.commit();
-
                     } catch (e) {
                         alert("Error deleting: " + e.message);
                     }
