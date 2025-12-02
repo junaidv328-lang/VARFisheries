@@ -66,7 +66,27 @@
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
         import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf } from 'lucide-react';
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBbEfjtUfn_nBmvdHY8INwtF4-YUJLNnYY",
+  authDomain: "var-fisheries.firebaseapp.com",
+  projectId: "var-fisheries",
+  storageBucket: "var-fisheries.firebasestorage.app",
+  messagingSenderId: "376492409540",
+  appId: "1:376492409540:web:274476f9fcf0c646ee3f91",
+  measurementId: "G-FJ1C5PMNRR"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
         const TruckLoadPlanner = () => {
             // --- CONFIGURATION ---
             const [driverName, setDriverName] = useState('');
@@ -1885,3 +1905,4 @@
     </script>
 </body>
 </html>
+
