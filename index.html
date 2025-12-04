@@ -67,6 +67,12 @@
         import { createRoot } from 'react-dom/client';
         import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf } from 'lucide-react';
 
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = 'https://wlntnttsliaygrqhfazj.supabase.co'
+const supabaseKey = process.env.SUPABASE_KEY
+const supabase = createClient(supabaseUrl, supabaseKey)
+        
         const TruckLoadPlanner = () => {
             // --- CONFIGURATION ---
             const [driverName, setDriverName] = useState('');
@@ -1885,3 +1891,4 @@
     </script>
 </body>
 </html>
+
