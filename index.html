@@ -58,7 +58,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf, Cloud } from 'lucide-react';
+        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf, Cloud, Wifi } from 'lucide-react';
         
         // --- SUPABASE IMPORT ---
         import { createClient } from '@supabase/supabase-js';
@@ -136,7 +136,7 @@
             const [newItemName, setNewItemName] = useState('');
             const [newItemBoxes, setNewItemBoxes] = useState(''); 
             const [newItemLooseKg, setNewItemLooseKg] = useState(''); 
-            const [isOffline, setIsOffline] = useState(!navigator.onLine);
+            const [isConnected, setIsConnected] = useState(false);
 
             // --- INITIALIZATION & SUPABASE LISTENERS ---
             useEffect(() => {
@@ -153,8 +153,13 @@
                         .select('*')
                         .order('timestamp', { ascending: false });
                     
-                    if (error) console.error("Error fetching trips:", error);
-                    else setSavedTrips(data || []);
+                    if (error) {
+                        console.error("Error fetching trips:", error);
+                        setIsConnected(false);
+                    } else {
+                        setSavedTrips(data || []);
+                        setIsConnected(true);
+                    }
                 };
 
                 const fetchExpenses = async () => {
@@ -174,7 +179,7 @@
                 // Real-time Subscriptions
                 const tripsChannel = supabase.channel('trips_channel')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'var_truck_trips' }, payload => {
-                        fetchTrips(); // Re-fetch on change
+                        fetchTrips(); 
                     })
                     .subscribe();
 
@@ -183,9 +188,6 @@
                         fetchExpenses();
                     })
                     .subscribe();
-
-                window.addEventListener('online', () => setIsOffline(false));
-                window.addEventListener('offline', () => setIsOffline(true));
 
                 return () => {
                     supabase.removeChannel(tripsChannel);
@@ -1098,8 +1100,8 @@
                             <div><h1 className="font-bold text-lg leading-tight">VAR Load Planner</h1><div className="flex flex-col leading-none"><span className="text-xs text-white/80 font-bold uppercase tracking-widest">{operationMode}</span></div></div>
                         </div>
                         <div className="text-right text-xs">
-                            <div className="uppercase font-bold text-white/60">Cloud Mode</div>
-                            <div className={`flex items-center justify-end gap-1 ${isOffline ? 'text-red-300' : 'text-green-300'}`}><Cloud size={10}/> {isOffline ? 'Offline' : 'Connected'}</div>
+                            <div className="uppercase font-bold text-white/60">Supabase Mode</div>
+                            <div className={`flex items-center justify-end gap-1 ${isConnected ? 'text-green-300' : 'text-red-300'}`}><Cloud size={10}/> {isConnected ? 'Connected' : 'Disconnected'}</div>
                         </div>
                     </div>
 
