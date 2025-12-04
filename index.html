@@ -498,7 +498,8 @@
                     alert("Trip Saved to Cloud!");
                     if(window.confirm("Start new load?")) resetGrid();
                 } catch (e) {
-                    alert("Error saving: " + e.message);
+                    console.error(e);
+                    alert("Error saving: " + e.message + " (Check RLS policies in Supabase)");
                 }
             };
 
@@ -538,7 +539,8 @@
                     setExpenseAmount('');
                     setExpenseNote('');
                 } catch (e) {
-                    alert("Error adding expense: " + e.message);
+                    console.error(e);
+                    alert("Error adding expense: " + e.message + " (Check RLS)");
                 }
             };
 
@@ -604,6 +606,8 @@
                     totalWeight: count * 35 
                 }));
 
+                // Fetch existing expenses linked to this trip from Firestore
+                // Note: expenses state is already synced via onSnapshot
                 const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
                 setTempExpenses(linkedExpenses);
 
