@@ -1,448 +1,1930 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VAR Load Planner — Supabase</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script type="importmap">
-  {
-    "imports": {
-      "react": "https://esm.sh/react@18.2.0",
-      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-      "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nellore Truck Loader (Supabase)</title>
+
+    <!-- Tailwind CSS for Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Babel for translating React code in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- PDF Generation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- Import Map with Supabase SDK -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+            "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+        }
     }
-  }
-  </script>
-  <style>
-    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;}
-    .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
-  </style>
+    </script>
+
+    <!-- Custom Styles for Animation & Print -->
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+        .custom-scroll::-webkit-scrollbar {
+            -webkit-appearance: none;
+            width: 8px; 
+            display: block;
+        }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background-color: #9ca3af; border: 2px solid #f1f1f1; }
+
+        .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
 </head>
-<body class="bg-gray-100">
-  <div id="root" class="min-h-screen"></div>
+<body class="bg-gray-100 text-gray-900 h-[100dvh] w-screen fixed inset-0 overflow-hidden">
+    <div id="root" class="h-full w-full"></div>
 
-  <script type="text/babel" data-type="module">
-  // ----------------- IMPORTS -----------------
-  import React, { useState, useEffect, useMemo } from "react";
-  import { createRoot } from "react-dom/client";
-  import { createClient } from "https://esm.sh/@supabase/supabase-js";
-  import { ArrowUpCircle, ArrowDownCircle, FileText, Camera, BarChart3, ClipboardList, Box, Trash2, Save } from "lucide-react";
+    <!-- THE APP LOGIC -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf, Cloud } from 'lucide-react';
+        
+        // --- SUPABASE IMPORT ---
+        import { createClient } from '@supabase/supabase-js';
 
-  // --------------- SUPABASE CONFIG ---------------
-  const SUPABASE_URL = "https://wlntnttsliaygrqhfazj.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsbnRudHRzbGlheWdycWhmYXpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4MzMzNjIsImV4cCI6MjA4MDQwOTM2Mn0.imoQLKoDxDVOmKbLOHVDsRxX5jRORMV5cYt2sFf9wiI";
+        // --- SUPABASE CONFIGURATION ---
+        const supabaseUrl = 'https://wlntnttsliaygrqhfazj.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndsbnRudHRzbGlheWdycWhmYXpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4MzMzNjIsImV4cCI6MjA4MDQwOTM2Mn0.imoQLKoDxDVOmKbLOHVDsRxX5jRORMV5cYt2sFf9wiI';
+        
+        // Initialize Supabase
+        const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const TruckLoadPlanner = () => {
+            // --- CONFIGURATION ---
+            const [driverName, setDriverName] = useState('');
+            const [customerName, setCustomerName] = useState('');
+            const [varBoxCount, setVarBoxCount] = useState(''); 
 
-  // --------------- MAIN APP -----------------
-  function App() {
-    // basic trip form
-    const [operationMode, setOperationMode] = useState("Sales");
-    const [tripDate, setTripDate] = useState(new Date().toISOString().slice(0,10));
-    const [driverName, setDriverName] = useState("");
-    const [customerName, setCustomerName] = useState("");
-    const [referenceId, setReferenceId] = useState("");
-    const [targetBoxCount, setTargetBoxCount] = useState("");
-    const [varBoxCount, setVarBoxCount] = useState("");
+            // Operation Mode, Targets & Date
+            const [operationMode, setOperationMode] = useState('Sales'); 
+            const [referenceId, setReferenceId] = useState(''); 
+            const [targetBoxCount, setTargetBoxCount] = useState(''); 
+            const [tripDate, setTripDate] = useState(new Date().toISOString().split('T')[0]); 
 
-    // grid simplified representation (you can keep your original grid logic)
-    const [gridBoxes, setGridBoxes] = useState([]); // array of {label,filled}
-    const [batchLabel, setBatchLabel] = useState("");
+            // --- HYBRID LAYOUT SYSTEM ---
+            const createDefaultLanes = () => [];
+            const [lanes, setLanes] = useState(createDefaultLanes);
+            const [rows, setRows] = useState([]); 
 
-    // direct entry
-    const [directItems, setDirectItems] = useState([]); // {name,boxes,looseKg}
-    const [dName, setDName] = useState("");
-    const [dBoxes, setDBoxes] = useState("");
-    const [dLoose, setDLoose] = useState("");
+            // --- STATE ---
+            const [gridData, setGridData] = useState({});
+            const [stackOrientations, setStackOrientations] = useState({}); 
+            const [stackHeightOverrides, setStackHeightOverrides] = useState({}); 
 
-    // state for cloud data
-    const [savedTrips, setSavedTrips] = useState([]);
-    const [expenses, setExpenses] = useState([]);
-    const [expenseCategory, setExpenseCategory] = useState("Labour");
-    const [expenseAmount, setExpenseAmount] = useState("");
-    const [expenseNote, setExpenseNote] = useState("");
+            const [selectedCell, setSelectedCell] = useState(null); 
+            const [activeTab, setActiveTab] = useState('visualizer');
+            const [batchInput, setBatchInput] = useState('');
+            const [generatedImage, setGeneratedImage] = useState(null);
+            const [showAggregatedDetails, setShowAggregatedDetails] = useState(false);
+            const [showItemStock, setShowItemStock] = useState(true); 
+            const captureRef = useRef(null);
 
-    const [editingTripId, setEditingTripId] = useState(null);
+            // RECORDS / HISTORY STATE (Managed by Supabase)
+            const [savedTrips, setSavedTrips] = useState([]);
+            const [expandedTripId, setExpandedTripId] = useState(null);
+            const [visibleRecords, setVisibleRecords] = useState(20); 
+            const [selectedItemHistory, setSelectedItemHistory] = useState(null); 
+            const [editingTripId, setEditingTripId] = useState(null); 
 
-    // Load on start
-    useEffect(() => {
-      loadTrips();
-      loadExpenses();
-    }, []);
+            // EXPENSES STATE (Managed by Supabase)
+            const [expenses, setExpenses] = useState([]);
+            const [expenseCategory, setExpenseCategory] = useState('Labour');
+            const [expenseAmount, setExpenseAmount] = useState('');
+            const [expenseNote, setExpenseNote] = useState('');
+            
+            const [tempExpenses, setTempExpenses] = useState([]);
+            const [tempExpenseCategory, setTempExpenseCategory] = useState('Transport');
+            const [tempExpenseAmount, setTempExpenseAmount] = useState('');
 
-    // ---------- SUPABASE CRUD ----------
-    async function loadTrips() {
-      try {
-        const { data, error } = await supabase
-          .from("trips")
-          .select("*")
-          .order("timestamp", { ascending: false });
-        if (error) throw error;
-        setSavedTrips(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("loadTrips failed", err);
-        alert("Failed to load trips from Supabase. Check console.");
-      }
-    }
+            const [showReportModal, setShowReportModal] = useState(false);
+            const [showStockSnapshotModal, setShowStockSnapshotModal] = useState(false);
+            const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+            const reportCaptureRef = useRef(null);
+            const stockCaptureRef = useRef(null);
 
-    async function loadExpenses() {
-      try {
-        const { data, error } = await supabase
-          .from("expenses")
-          .select("*")
-          .order("timestamp", { ascending: false });
-        if (error) throw error;
-        setExpenses(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("loadExpenses failed", err);
-      }
-    }
+            const [showDirectEntry, setShowDirectEntry] = useState(false);
+            const [directData, setDirectData] = useState({
+                date: new Date().toISOString().split('T')[0],
+                mode: 'Purchase',
+                partyName: '',
+                refId: '', 
+                driverName: '', 
+                items: [] 
+            });
+            
+            const [newItemName, setNewItemName] = useState('');
+            const [newItemBoxes, setNewItemBoxes] = useState(''); 
+            const [newItemLooseKg, setNewItemLooseKg] = useState(''); 
+            const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-    function computeManifestFromGrid() {
-      // if you have complex grid logic, adapt here.
-      // current simple approach: totalBoxes = count of filled labels
-      let totalBoxes = 0;
-      const summary = {};
-      gridBoxes.forEach(b => {
-        if (b.filled) {
-          totalBoxes++;
-          const name = (b.label || "Unlabeled").trim();
-          summary[name] = (summary[name] || 0) + 1;
-        }
-      });
-      return { totalBoxes, summary };
-    }
+            // --- INITIALIZATION & SUPABASE LISTENERS ---
+            useEffect(() => {
+                if (!window.html2canvas) {
+                    const script = document.createElement('script');
+                    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+                    script.async = true;
+                    document.body.appendChild(script);
+                }
 
-    // Save Trip (truck mode)
-    async function saveTrip() {
-      const { totalBoxes, summary } = computeManifestFromGrid();
-      if (totalBoxes === 0) return alert("Cannot save empty trip");
+                const fetchTrips = async () => {
+                    const { data, error } = await supabase
+                        .from('var_truck_trips')
+                        .select('*')
+                        .order('timestamp', { ascending: false });
+                    
+                    if (error) console.error("Error fetching trips:", error);
+                    else setSavedTrips(data || []);
+                };
 
-      const newTrip = {
-        tripDate,
-        operationMode,
-        driverName,
-        customerName,
-        referenceId,
-        targetBoxCount: targetBoxCount ? Number(targetBoxCount) : null,
-        varBoxCount: varBoxCount ? Number(varBoxCount) : null,
-        totalBoxes,
-        summary,
-        detailedItems: null,
-        isDirectEntry: false,
-        timestamp: Date.now()
-      };
+                const fetchExpenses = async () => {
+                    const { data, error } = await supabase
+                        .from('var_truck_expenses')
+                        .select('*')
+                        .order('timestamp', { ascending: false });
 
-      try {
-        const { data, error } = await supabase.from("trips").insert([newTrip]).select();
-        if (error) throw error;
-        const saved = data[0];
-        setSavedTrips(prev => [saved, ...prev]);
-        if (window.confirm("Trip saved to cloud. Start a new load?")) {
-          // clear grid form
-          setGridBoxes([]);
-          setBatchLabel("");
-          setDriverName("");
-          setCustomerName("");
-          setVarBoxCount("");
-          setTargetBoxCount("");
-          setReferenceId("");
-        }
-      } catch (err) {
-        console.error("saveTrip error", err);
-        alert("Save failed. See console.");
-      }
-    }
+                    if (error) console.error("Error fetching expenses:", error);
+                    else setExpenses(data || []);
+                };
 
-    // Direct entry save (purchase or sales)
-    async function saveDirectEntry({ shouldDownload = false } = {}) {
-      if (directItems.length === 0) return alert("Add at least one item");
-      if (!customerName && !driverName) return alert("Enter party or driver name");
+                // Initial Fetch
+                fetchTrips();
+                fetchExpenses();
 
-      let totalBoxes = 0;
-      const summary = {};
-      directItems.forEach(it => {
-        const qty = Number(it.boxes) || 0;
-        totalBoxes += qty;
-        const nm = it.name.trim();
-        summary[nm] = (summary[nm] || 0) + qty;
-      });
+                // Real-time Subscriptions
+                const tripsChannel = supabase.channel('trips_channel')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'var_truck_trips' }, payload => {
+                        fetchTrips(); // Re-fetch on change
+                    })
+                    .subscribe();
 
-      const newRecord = {
-        tripDate,
-        operationMode,
-        driverName: driverName || "Direct Entry",
-        customerName: customerName || "Direct",
-        referenceId: referenceId || "DIRECT",
-        targetBoxCount: null,
-        varBoxCount: null,
-        totalBoxes,
-        summary,
-        detailedItems: directItems,
-        isDirectEntry: true,
-        timestamp: Date.now()
-      };
+                const expensesChannel = supabase.channel('expenses_channel')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'var_truck_expenses' }, payload => {
+                        fetchExpenses();
+                    })
+                    .subscribe();
 
-      try {
-        let savedTrip;
-        if (editingTripId) {
-          const { data, error } = await supabase.from("trips").update(newRecord).eq("id", editingTripId).select();
-          if (error) throw error;
-          savedTrip = data[0];
-          setSavedTrips(prev => prev.map(t => t.id === editingTripId ? savedTrip : t));
-        } else {
-          const { data, error } = await supabase.from("trips").insert([newRecord]).select();
-          if (error) throw error;
-          savedTrip = data[0];
-          setSavedTrips(prev => [savedTrip, ...prev]);
-        }
+                window.addEventListener('online', () => setIsOffline(false));
+                window.addEventListener('offline', () => setIsOffline(true));
 
-        // if you had temp expenses linked to this direct entry, you'd insert them here with tripId = savedTrip.id
+                return () => {
+                    supabase.removeChannel(tripsChannel);
+                    supabase.removeChannel(expensesChannel);
+                }
+            }, []);
 
-        if (shouldDownload) {
-          // small CSV export for this record
-          const rows = directItems.map(it => [tripDate, operationMode, customerName || driverName, referenceId || 'DIRECT', it.name, it.boxes, it.looseKg || 0].join(","));
-          const csv = ["Date,Mode,Party,Ref,Item,Boxes,LooseKg", ...rows].join("\n");
-          const blob = new Blob([csv], { type: "text/csv" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url; a.download = `DirectEntry_${tripDate}.csv`; a.click();
-        }
+            // --- LOGIC HELPERS ---
+            const getKey = (type, major, minor, h) => {
+                const prefix = type === 'lane' ? 'L' : 'R';
+                return `${prefix}-${major}-${minor}-${h}`;
+            };
 
-        // reset
-        setDirectItems([]);
-        setDName(""); setDBoxes(""); setDLoose("");
-        setReferenceId(""); setCustomerName(""); setDriverName("");
-        setEditingTripId(null);
-        alert(editingTripId ? "Updated!" : "Saved!");
-      } catch (err) {
-        console.error("saveDirectEntry error", err);
-        alert("Failed to save direct entry");
-      }
-    }
+            const getStackConfigKey = (type, major, minor) => {
+                const prefix = type === 'lane' ? 'L' : 'R';
+                return `${prefix}-${major}-${minor}`;
+            }
 
-    // Delete trip and its expenses
-    async function deleteTrip(id) {
-      if (!window.confirm("Delete this record? This will also delete expenses for it.")) return;
-      try {
-        await supabase.from("expenses").delete().eq("tripId", id);
-        await supabase.from("trips").delete().eq("id", id);
-        setSavedTrips(prev => prev.filter(t => t.id !== id));
-        setExpenses(prev => prev.filter(e => e.tripId !== id));
-      } catch (err) {
-        console.error("deleteTrip error", err);
-        alert("Delete failed");
-      }
-    }
+            const getBox = (type, major, minor, h) => {
+                const key = getKey(type, major, minor, h);
+                return gridData[key] || { id: key, label: '', filled: false };
+            };
 
-    // Add a simple expense (not linked to a trip)
-    async function addExpense() {
-      if (!expenseAmount) return alert("Enter amount");
-      const newExp = {
-        tripId: null,
-        category: expenseCategory,
-        amount: parseFloat(expenseAmount),
-        note: expenseNote || "",
-        date: tripDate,
-        timestamp: Date.now()
-      };
-      try {
-        const { data, error } = await supabase.from("expenses").insert([newExp]).select();
-        if (error) throw error;
-        setExpenses(prev => [data[0], ...prev]);
-        setExpenseAmount(""); setExpenseNote("");
-      } catch (err) {
-        console.error("addExpense error", err);
-        alert("Failed to save expense");
-      }
-    }
+            const getStackOrientation = (type, major, minor) => {
+                return stackOrientations[getStackConfigKey(type, major, minor)] || 'Horizontal';
+            };
 
-    // Add item to direct entry list
-    function addDirectItem() {
-      if (!dName || !dBoxes) return alert("Enter item and boxes");
-      setDirectItems(prev => [...prev, { name: dName, boxes: Number(dBoxes), looseKg: Number(dLoose) || 0 }]);
-      setDName(""); setDBoxes(""); setDLoose("");
-    }
+            const getStackHeight = (type, major, minor) => {
+                const override = stackHeightOverrides[getStackConfigKey(type, major, minor)];
+                if (override !== undefined) return override;
 
-    // Quick CSV export for all trips
-    function exportCSV() {
-      if (!savedTrips.length) return alert("No records");
-      const headers = ["Date","Mode","Driver","Customer","Ref","TotalBoxes","Direct","Summary"];
-      const rows = savedTrips.map(t => [
-        t.tripDate, t.operationMode, t.driverName || "-", t.customerName || "-", t.referenceId || "-", t.totalBoxes, t.isDirectEntry ? "Direct":"Truck", JSON.stringify(t.summary)
-      ].join(","));
-      const csv = [headers.join(","), ...rows].join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `var_records_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-    }
+                if (type === 'lane') {
+                    const l = lanes.find(x => x.id === major);
+                    return l ? l.height : 5;
+                } else {
+                    const r = rows[major];
+                    return r ? r.height : 5;
+                }
+            };
 
-    // --------------- UI ----------------
-    return (
-      <div className="max-w-3xl mx-auto p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            {operationMode === "Sales" ? <ArrowUpCircle/> : <ArrowDownCircle/>}
-            <h1 className="text-xl font-bold">VAR Load Planner (Supabase)</h1>
-          </div>
-          <div className="text-sm text-gray-600">Cloud: wlntntts...supabase.co</div>
-        </div>
+            const toggleStackOrientation = (type, major, minor) => {
+                const k = getStackConfigKey(type, major, minor);
+                const current = stackOrientations[k] || 'Horizontal';
+                setStackOrientations(prev => ({
+                    ...prev,
+                    [k]: current === 'Horizontal' ? 'Vertical' : 'Horizontal'
+                }));
+            };
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Trip / Direct Entry Form */}
-          <div className="bg-white p-4 rounded shadow">
-            <div className="flex gap-2 mb-2">
-              <select className="border p-2 flex-1" value={operationMode} onChange={e => setOperationMode(e.target.value)}>
-                <option>Sales</option>
-                <option>Purchase</option>
-              </select>
-              <input className="border p-2" type="date" value={tripDate} onChange={e => setTripDate(e.target.value)} />
-            </div>
+            const adjustStackHeight = (type, major, minor, delta) => {
+                const currentHeight = getStackHeight(type, major, minor);
+                const newHeight = Math.max(1, Math.min(15, currentHeight + delta));
+                const key = getStackConfigKey(type, major, minor);
+                setStackHeightOverrides(prev => ({ ...prev, [key]: newHeight }));
+            };
 
-            <input className="border w-full p-2 mb-2" placeholder="Driver name / Party" value={driverName} onChange={e => setDriverName(e.target.value)} />
-            <input className="border w-full p-2 mb-2" placeholder="Customer / Party" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-            <div className="flex gap-2 mb-2">
-              <input className="border p-2 flex-1" placeholder="Reference ID" value={referenceId} onChange={e => setReferenceId(e.target.value)} />
-              <input className="border p-2 w-28" placeholder="Target" value={targetBoxCount} onChange={e => setTargetBoxCount(e.target.value)} />
-              <input className="border p-2 w-28" placeholder="Var" value={varBoxCount} onChange={e => setVarBoxCount(e.target.value)} />
-            </div>
+            const updateBox = (type, major, minor, h, updates) => {
+                const key = getKey(type, major, minor, h);
+                setGridData(prev => ({
+                    ...prev,
+                    [key]: { ...getBox(type, major, minor, h), ...updates }
+                }));
+            };
 
-            <div className="mb-2">
-              <label className="text-sm font-semibold">Grid Batch Input (simple)</label>
-              <div className="flex gap-2 mt-1">
-                <input className="border p-2 flex-1" placeholder="Label for boxes" value={batchLabel} onChange={e => setBatchLabel(e.target.value)} />
-                <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={() => {
-                  if (!batchLabel) return alert("Enter label");
-                  // add 5 filled boxes quickly (you can change)
-                  const arr = [...gridBoxes];
-                  for (let i=0;i<5;i++) arr.push({ label: batchLabel, filled: true });
-                  setGridBoxes(arr);
-                }}>Fill</button>
-              </div>
-              <div className="mt-2 text-xs text-gray-500">Grid boxes: {gridBoxes.filter(b=>b.filled).length}</div>
-            </div>
+            const fillStack = (type, major, minor) => {
+                if (!batchInput) return;
 
-            <div className="flex gap-2 mt-3">
-              <button className="bg-green-600 text-white px-3 py-2 rounded flex items-center gap-2" onClick={saveTrip}><Save/> Save Trip</button>
-              <button className="bg-yellow-500 text-white px-3 py-2 rounded" onClick={() => {
-                // reset form
-                setGridBoxes([]); setBatchLabel(""); setDriverName(""); setCustomerName("");
-                setTargetBoxCount(""); setVarBoxCount(""); setReferenceId("");
-              }}>Reset</button>
-            </div>
-          </div>
+                const heightLimit = getStackHeight(type, major, minor);
+                const newGrid = { ...gridData };
 
-          {/* Direct Entry & Expenses */}
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Direct Entry (Purchase/Sale)</h3>
-            <div className="flex gap-2 mb-2">
-              <input className="border p-2 flex-1" placeholder="Item name" value={dName} onChange={e => setDName(e.target.value)} />
-              <input className="border p-2 w-24" placeholder="Boxes" value={dBoxes} onChange={e => setDBoxes(e.target.value)} />
-              <input className="border p-2 w-24" placeholder="Loose Kg" value={dLoose} onChange={e => setDLoose(e.target.value)} />
-              <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={addDirectItem}>Add</button>
-            </div>
+                for (let h = 0; h < heightLimit; h++) {
+                    const key = getKey(type, major, minor, h);
+                    newGrid[key] = { 
+                        id: key, 
+                        label: batchInput, 
+                        filled: true
+                    };
+                }
+                setGridData(newGrid);
+            };
 
-            <div className="max-h-36 overflow-auto mb-2 border p-2">
-              {directItems.length === 0 ? <div className="text-xs text-gray-500">No items</div> :
-                directItems.map((it, idx) => <div key={idx} className="flex justify-between items-center py-1">
-                  <div>{it.name} — {it.boxes} Bx {it.looseKg ? `+${it.looseKg} Kg` : ""}</div>
-                  <button className="text-red-500" onClick={() => setDirectItems(directItems.filter((_,i)=>i!==idx))}>Remove</button>
-                </div>)}
-            </div>
+            const resetGrid = () => {
+                setGridData({});
+                setStackOrientations({});
+                setStackHeightOverrides({});
+                setGeneratedImage(null);
+                setBatchInput('');
+            };
 
-            <div className="flex gap-2">
-              <button className="bg-indigo-600 text-white px-3 py-2 rounded" onClick={() => saveDirectEntry({ shouldDownload: false })}>Save Direct</button>
-              <button className="bg-gray-600 text-white px-3 py-2 rounded" onClick={() => saveDirectEntry({ shouldDownload: true })}>Save & Download CSV</button>
-            </div>
+            const manualResetGrid = () => {
+                if (window.confirm("Clear all loaded boxes?")) {
+                    resetGrid();
+                    if (activeTab === 'share') setActiveTab('visualizer');
+                }
+            };
 
-            <hr className="my-3" />
+            const resetLayoutConfig = () => {
+                if (window.confirm("Reset layout configuration (Clear all)?")) {
+                    setLanes([]);
+                    setRows([]);
+                    setDriverName('');
+                    setCustomerName('');
+                    setVarBoxCount('');
+                    setTargetBoxCount('');
+                    setReferenceId('');
+                    setTripDate(new Date().toISOString().split('T')[0]);
+                    setGridData({});
+                    setStackOrientations({});
+                    setStackHeightOverrides({});
+                }
+            };
 
-            <h3 className="font-semibold mb-2">Expenses</h3>
-            <div className="flex gap-2 mb-2">
-              <select className="border p-2" value={expenseCategory} onChange={e => setExpenseCategory(e.target.value)}>
-                <option>Labour</option>
-                <option>Transport</option>
-                <option>Feed</option>
-                <option>Other</option>
-              </select>
-              <input className="border p-2 w-32" placeholder="Amount" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} />
-              <input className="border p-2 flex-1" placeholder="Note" value={expenseNote} onChange={e => setExpenseNote(e.target.value)} />
-              <button className="bg-green-600 text-white px-3 py-2 rounded" onClick={addExpense}>Add</button>
-            </div>
+            const getStackStats = (type, major, minor) => {
+                let count = 0;
+                const heightLimit = getStackHeight(type, major, minor);
 
-            <div className="max-h-36 overflow-auto">
-              {expenses.map(e => <div key={e.id} className="flex justify-between items-center py-1 text-sm">
-                <div>{e.category} — ₹{e.amount} <span className="text-xs text-gray-400">({e.date})</span></div>
-                <button className="text-red-500" onClick={async ()=> {
-                  if (!confirm("Delete expense?")) return;
-                  try {
-                    const { error } = await supabase.from("expenses").delete().eq("id", e.id);
-                    if (error) throw error;
-                    setExpenses(prev => prev.filter(x => x.id !== e.id));
-                  } catch (err) { console.error(err); alert("Delete failed"); }
-                }}>Delete</button>
-              </div>)}
-            </div>
-          </div>
-        </div>
+                for (let h = 0; h < heightLimit; h++) {
+                    if (getBox(type, major, minor, h).filled) count++;
+                }
+                return { count, max: heightLimit };
+            };
 
-        <div className="mt-6 bg-white p-4 rounded shadow">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-semibold">Saved Records</h3>
-            <div className="flex gap-2">
-              <button className="bg-blue-600 text-white px-3 py-2 rounded" onClick={exportCSV}>Export CSV</button>
-              <button className="bg-red-600 text-white px-3 py-2 rounded" onClick={async ()=> {
-                if (!confirm("Delete ALL trips and expenses?")) return;
+            // --- CONFIG MANAGEMENT ---
+            const addLane = () => {
+                if(lanes.length >= 5) return alert("Max 5 lanes");
+                setLanes([...lanes, { id: Date.now(), name: `Lane ${lanes.length + 1}`, stacks: 4, height: 5 }]);
+            };
+            const removeLane = (id) => {
+                setLanes(lanes.filter(l => l.id !== id));
+            };
+            const updateLaneConfig = (id, field, value) => {
+                setLanes(lanes.map(l => l.id === id ? { ...l, [field]: parseInt(value) || 0 } : l));
+            };
+
+            const addRow = () => {
+                setRows([...rows, { id: Date.now(), cols: 3, height: 5 }]);
+            };
+            const removeRow = (idx) => {
+                const newRows = [...rows];
+                newRows.splice(idx, 1);
+                setRows(newRows);
+            };
+            const updateRowConfig = (idx, field, value) => {
+                const newRows = [...rows];
+                newRows[idx][field] = parseInt(value) || 0;
+                setRows(newRows);
+            };
+
+
+            // --- MANIFEST & AGGREGATION ---
+            const getManifestData = () => {
+                let totalBoxes = 0;
+                const summary = {};
+                const tally = (label) => {
+                    const cleanLabel = label ? label.trim() : 'Unlabeled';
+                    summary[cleanLabel] = (summary[cleanLabel] || 0) + 1;
+                };
+
+                lanes.forEach(lane => {
+                    for (let s = 0; s < lane.stacks; s++) {
+                        const hLimit = getStackHeight('lane', lane.id, s);
+                        for (let h = 0; h < hLimit; h++) {
+                            const box = getBox('lane', lane.id, s, h);
+                            if (box.filled) { totalBoxes++; tally(box.label); }
+                        }
+                    }
+                });
+
+                rows.forEach((row, rIdx) => {
+                    for (let c = 0; c < row.cols; c++) {
+                        const hLimit = getStackHeight('row', rIdx, c);
+                        for (let h = 0; h < hLimit; h++) {
+                            const box = getBox('row', rIdx, c, h);
+                            if (box.filled) { totalBoxes++; tally(box.label); }
+                        }
+                    }
+                });
+
+                return { totalBoxes, summary };
+            };
+
+            // MEMOIZED TOTALS
+            const stockTotals = useMemo(() => {
+                let purchased = 0;
+                let sold = 0;
+                const itemStats = {}; 
+
+                savedTrips.forEach(t => {
+                    const mode = t.operationMode; 
+                    const boxes = Number(t.totalBoxes) || 0;
+
+                    if (mode === 'Purchase') purchased += boxes;
+                    else if (mode === 'Sales') sold += boxes;
+
+                    const ensureItem = (name) => {
+                        if (!itemStats[name]) itemStats[name] = { 
+                            in: { boxes: 0, loose: 0 }, 
+                            out: { boxes: 0, loose: 0 } 
+                        };
+                    };
+
+                    if (t.detailedItems && Array.isArray(t.detailedItems)) {
+                        t.detailedItems.forEach(item => {
+                            const cleanItem = item.name.trim();
+                            ensureItem(cleanItem);
+                            const b = Number(item.boxes) || 0;
+                            const l = Number(item.looseKg) || 0;
+                            
+                            if (mode === 'Purchase') {
+                                itemStats[cleanItem].in.boxes += b;
+                                itemStats[cleanItem].in.loose += l;
+                            } else {
+                                itemStats[cleanItem].out.boxes += b;
+                                itemStats[cleanItem].out.loose += l;
+                            }
+                        });
+                    } else if (t.summary) {
+                        Object.keys(t.summary).forEach(item => {
+                            const cleanItem = item.trim();
+                            ensureItem(cleanItem);
+                            const qty = Number(t.summary[item]) || 0;
+
+                            if (mode === 'Purchase') {
+                                itemStats[cleanItem].in.boxes += qty;
+                            } else {
+                                itemStats[cleanItem].out.boxes += qty;
+                            }
+                        });
+                    }
+                });
+                return { purchased, sold, balance: purchased - sold, itemStats };
+            }, [savedTrips]);
+
+            // Helper to render Qty Cell
+            const renderQtyCell = (boxes, loose, colorClass) => {
+                if (!boxes && !loose) return <span className="text-gray-300">-</span>;
+                return (
+                    <div className={`flex flex-col items-end leading-tight ${colorClass}`}>
+                        <span className="font-bold">{boxes || 0} Bx</span>
+                        {loose ? <span className="text-[9px] opacity-80">{loose > 0 ? '+' : ''}{loose} Kg</span> : null}
+                    </div>
+                );
+            };
+
+            const getAggregatedStats = () => {
+                const currentData = getManifestData();
+                if (!customerName) return { total: currentData.totalBoxes, items: currentData.summary };
+
+                const aggregatedItems = { ...currentData.summary };
+                let aggregatedTotal = currentData.totalBoxes;
+
+                const relevantTrips = savedTrips.filter(t => {
+                    const sameMode = t.operationMode === operationMode;
+                    const sameDate = t.tripDate === tripDate;
+                    const sameCustomer = t.customerName.toLowerCase().trim() === customerName.toLowerCase().trim();
+                    const sameRef = referenceId ? (t.referenceId.toLowerCase().trim() === referenceId.toLowerCase().trim()) : true;
+                    return sameMode && sameDate && sameCustomer && sameRef;
+                });
+
+                relevantTrips.forEach(t => {
+                    aggregatedTotal += t.totalBoxes;
+                    if (t.summary) {
+                        Object.keys(t.summary).forEach(item => {
+                            aggregatedItems[item] = (aggregatedItems[item] || 0) + t.summary[item];
+                        });
+                    }
+                });
+                return { total: aggregatedTotal, items: aggregatedItems, tripCount: relevantTrips.length };
+            };
+
+            const generateManifest = () => {
+                const { totalBoxes, summary } = getManifestData();
+                let manifest = `MANIFEST - ${operationMode.toUpperCase()}\nDATE: ${tripDate}\nDRIVER: ${driverName}\nREF: ${referenceId || '-'}\nTARGET: ${targetBoxCount || '-'}\nACTUAL: ${totalBoxes}\nVAR BOXES: ${varBoxCount}\n----------------\n`;
+                Object.keys(summary).forEach(label => {
+                    manifest += `${label}: ${summary[label]} boxes\n`;
+                });
+                return manifest;
+            };
+
+            // --- SUPABASE ACTIONS (ASYNC) ---
+            const saveTrip = async () => {
+                const { totalBoxes, summary } = getManifestData();
+                if (totalBoxes === 0) return alert("Cannot save empty trip");
+
+                // Convert summary to detailedItems format for consistency
+                const detailedItems = Object.entries(summary).map(([name, count]) => ({
+                    name, boxes: count, looseKg: 0, totalWeight: count * 35
+                }));
+
+                const newTripData = {
+                    id: Date.now(), // Use timestamp as ID for simplicity
+                    timestamp: Date.now(),
+                    tripDate,
+                    operationMode,
+                    driverName,
+                    customerName,
+                    referenceId,
+                    targetBoxCount,
+                    varBoxCount,
+                    totalBoxes,
+                    summary,
+                    detailedItems, 
+                    isDirectEntry: false 
+                };
+
                 try {
-                  await supabase.from("expenses").delete();
-                  await supabase.from("trips").delete();
-                  setSavedTrips([]); setExpenses([]);
-                  alert("All cleared");
-                } catch (err) { console.error(err); alert("Clear failed"); }
-              }}>Clear All Cloud</button>
-            </div>
-          </div>
+                    const { error } = await supabase.from('var_truck_trips').insert([newTripData]);
+                    if (error) throw error;
+                    
+                    alert("Trip Saved to Cloud!");
+                    if(window.confirm("Start new load?")) resetGrid();
+                } catch (e) {
+                    alert("Error saving: " + e.message);
+                }
+            };
 
-          <div className="max-h-96 overflow-auto">
-            {savedTrips.length === 0 ? <div className="text-sm text-gray-500">No records yet</div> :
-              savedTrips.map(t => (
-                <div key={t.id} className="border-b py-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-semibold">{t.operationMode} — {t.tripDate} <span className="text-xs text-gray-400">#{t.id}</span></div>
-                      <div className="text-sm text-gray-600">{t.driverName} / {t.customerName} — Boxes: {t.totalBoxes}</div>
-                      <div className="text-xs text-gray-500">Ref: {t.referenceId || '-'}</div>
+             const clearAllLocalData = async () => {
+                if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
+                if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
+                
+                try {
+                    // Delete all rows where id is not 0 (effectively all)
+                    const { error: err1 } = await supabase.from('var_truck_trips').delete().neq('id', 0);
+                    const { error: err2 } = await supabase.from('var_truck_expenses').delete().neq('id', 0);
+                    
+                    if (err1 || err2) throw new Error("Partially failed to clear");
+
+                    alert("Cloud Database Cleared.");
+                    setActiveTab('records');
+                } catch (e) {
+                    console.error("Clear failed", e);
+                    alert("Failed to clear cloud data. " + e.message);
+                }
+            };
+
+            // --- EXPENSE MANAGEMENT (SUPABASE) ---
+            const addExpense = async () => {
+                if (!expenseAmount) return;
+                const newExpense = {
+                    id: Date.now(),
+                    timestamp: Date.now(),
+                    date: reportDate, 
+                    category: expenseCategory,
+                    amount: parseFloat(expenseAmount),
+                    note: expenseNote
+                };
+                try {
+                    const { error } = await supabase.from('var_truck_expenses').insert([newExpense]);
+                    if (error) throw error;
+                    setExpenseAmount('');
+                    setExpenseNote('');
+                } catch (e) {
+                    alert("Error adding expense: " + e.message);
+                }
+            };
+
+            const deleteExpense = async (id) => {
+                if(window.confirm("Delete this expense?")) {
+                    try {
+                        const { error } = await supabase.from('var_truck_expenses').delete().eq('id', id);
+                        if (error) throw error;
+                    } catch (e) {
+                        alert("Error deleting: " + e.message);
+                    }
+                }
+            }
+
+            // --- DIRECT ENTRY & EDITING ACTIONS ---
+            const addTempExpense = () => {
+                if(!tempExpenseAmount) return;
+                setTempExpenses([...tempExpenses, {
+                    id: Date.now(), 
+                    category: tempExpenseCategory,
+                    amount: parseFloat(tempExpenseAmount)
+                }]);
+                setTempExpenseAmount('');
+            };
+
+            const removeTempExpense = (id) => {
+                setTempExpenses(tempExpenses.filter(e => e.id !== id));
+            };
+
+            const addItemToDirect = () => {
+                if (!newItemName || !newItemBoxes) return;
+                const boxes = parseInt(newItemBoxes) || 0;
+                const loose = parseFloat(newItemLooseKg) || 0;
+                const totalWeight = (boxes * 35) + loose;
+
+                setDirectData({
+                    ...directData,
+                    items: [...directData.items, { 
+                        name: newItemName, 
+                        count: boxes, 
+                        boxes: boxes,
+                        looseKg: loose,
+                        totalWeight: totalWeight
+                    }]
+                });
+                setNewItemName('');
+                setNewItemBoxes('');
+                setNewItemLooseKg('');
+            };
+
+            const removeDirectItem = (idx) => {
+                const newItems = [...directData.items];
+                newItems.splice(idx, 1);
+                setDirectData({...directData, items: newItems});
+            };
+
+            const openEditRecord = async (trip) => {
+                const itemsList = trip.detailedItems || Object.entries(trip.summary || {}).map(([name, count]) => ({ 
+                    name, 
+                    count, 
+                    boxes: count, 
+                    looseKg: 0, 
+                    totalWeight: count * 35 
+                }));
+
+                const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
+                setTempExpenses(linkedExpenses);
+
+                setDirectData({
+                    date: trip.tripDate,
+                    mode: trip.operationMode,
+                    partyName: trip.customerName,
+                    refId: trip.referenceId,
+                    driverName: trip.driverName || '',
+                    items: itemsList
+                });
+                setEditingTripId(trip.id);
+                setShowDirectEntry(true);
+            };
+
+            const handleDirectSave = async (shouldDownload) => {
+
+                if (directData.items.length === 0) return alert("Add at least one item");
+                if (!directData.partyName) return alert("Enter Party Name");
+
+                let totalBoxes = 0;
+                const summary = {};
+
+                directData.items.forEach(item => {
+                    const qty = Number(item.boxes) || 0;
+                    totalBoxes += qty;
+                    const cleanName = item.name.trim();
+                    summary[cleanName] = (summary[cleanName] || 0) + qty;
+                });
+
+                const recordId = editingTripId || Date.now();
+                const tripData = {
+                    id: recordId,
+                    timestamp: editingTripId ? savedTrips.find(t => t.id === editingTripId)?.timestamp : Date.now(),
+                    tripDate: directData.date,
+                    operationMode: directData.mode,
+                    customerName: directData.partyName,
+                    referenceId: directData.refId || 'DIRECT', 
+                    totalBoxes,
+                    summary,
+                    detailedItems: directData.items,
+                    isDirectEntry: true, 
+                    driverName: directData.driverName || 'Direct Entry'
+                };
+
+                try {
+                    // 1. Upsert Trip (Insert or Update)
+                    const { error: tripError } = await supabase.from('var_truck_trips').upsert(tripData);
+                    if (tripError) throw tripError;
+
+                    // 2. Handle Expenses
+                    // Delete existing linked expenses
+                    const { error: delError } = await supabase.from('var_truck_expenses').delete().eq('tripId', recordId);
+                    if (delError) throw delError;
+
+                    // Insert new ones
+                    if (tempExpenses.length > 0) {
+                        const expToInsert = tempExpenses.map(exp => ({
+                            id: Date.now() + Math.random(), // Generate unique IDs
+                            timestamp: Date.now(),
+                            date: directData.date,
+                            category: exp.category,
+                            amount: exp.amount,
+                            tripId: recordId
+                        }));
+                        const { error: insError } = await supabase.from('var_truck_expenses').insert(expToInsert);
+                        if (insError) throw insError;
+                    }
+                    
+                    alert(editingTripId ? "Record Updated!" : "Record Saved!");
+
+                    if (shouldDownload) {
+                        const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg"];
+                        const rows = directData.items.map(item => [
+                            directData.date,
+                            directData.mode,
+                            directData.partyName,
+                            directData.refId || '-',
+                            item.name,
+                            item.boxes,
+                            item.looseKg || 0,
+                            item.totalWeight || (item.boxes * 35)
+                        ].join(","));
+
+                        const csvContent = [headers.join(","), ...rows].join("\n");
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Record_${directData.partyName}_${directData.date}.csv`;
+                        a.click();
+                    }
+
+                    setShowDirectEntry(false);
+                    setEditingTripId(null);
+                    setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
+                    setTempExpenses([]);
+
+                } catch (e) {
+                    console.error(e);
+                    alert("Error saving record: " + e.message);
+                }
+            };
+
+            const deleteTrip = async (id) => {
+                if(window.confirm("Delete this record? This will also delete associated expenses.")) {
+                    try {
+                        // Delete trip
+                        const { error: tErr } = await supabase.from('var_truck_trips').delete().eq('id', id);
+                        if (tErr) throw tErr;
+
+                        // Delete expenses
+                        const { error: eErr } = await supabase.from('var_truck_expenses').delete().eq('tripId', id);
+                        if (eErr) throw eErr;
+
+                    } catch (e) {
+                        alert("Error deleting: " + e.message);
+                    }
+                }
+            };
+
+            const downloadCSV = () => {
+                if(savedTrips.length === 0) return alert("No records to export");
+                const headers = ["Date", "Mode", "Type", "Driver", "Customer", "Ref ID", "Total Boxes", "Details"];
+                const csvContent = [
+                    headers.join(","),
+                    ...savedTrips.map(t => [
+                        t.tripDate, t.operationMode, t.isDirectEntry ? 'Direct' : 'Truck', t.driverName, t.customerName, t.referenceId, t.totalBoxes,
+                        JSON.stringify(t.summary).replace(/,/g, ';') 
+                    ].join(","))
+                ].join("\n");
+                const blob = new Blob([csvContent], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `var_truck_records_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+            };
+
+            // REPORT CAPTURE HANDLER
+            const handleReportCapture = async () => {
+                if (!window.html2canvas || !window.jspdf) { 
+                    alert("Loading PDF tools..."); return; 
+                } 
+                
+                const input = reportCaptureRef.current;
+                if (!input) return;
+
+                try {
+                    const clone = input.cloneNode(true);
+                    clone.style.width = '1000px'; 
+                    clone.style.position = 'fixed';
+                    clone.style.top = '-10000px';
+                    clone.style.left = '0';
+                    clone.style.zIndex = '-1';
+                    document.body.appendChild(clone);
+
+                    const canvas = await window.html2canvas(clone, { 
+                        scale: 3, 
+                        logging: false, 
+                        useCORS: true,
+                        windowWidth: 1000
+                    });
+                    
+                    document.body.removeChild(clone);
+
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const imgWidth = 210; 
+                    const pageHeight = 297; 
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', [imgWidth, Math.max(imgHeight, pageHeight)]);
+                    
+                    pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+                    
+                    if (navigator.share) {
+                        const pdfBlob = pdf.output('blob');
+                        const file = new File([pdfBlob], `Daily_Report_${reportDate}.pdf`, { type: "application/pdf" });
+                        await navigator.share({ files: [file], title: `Daily Report ${reportDate}` });
+                    } else {
+                        pdf.save(`Daily_Report_${reportDate}.pdf`);
+                    }
+                } catch (error) { 
+                    console.error(error); alert("Report generation failed"); 
+                }
+            };
+
+            // STOCK SNAPSHOT HANDLER
+            const handleStockSnapshot = async () => {
+                if (!window.html2canvas || !stockCaptureRef.current) { 
+                    alert("Loading image tool..."); return; 
+                } 
+                try {
+                    const canvas = await window.html2canvas(stockCaptureRef.current, { 
+                        backgroundColor: '#ffffff', scale: 2, logging: false, useCORS: true 
+                    });
+                    if (navigator.share) {
+                        canvas.toBlob(async (blob) => {
+                            const file = new File([blob], `Stock_Summary_${new Date().toISOString().split('T')[0]}.png`, { type: "image/png" });
+                            await navigator.share({ files: [file], title: `Stock Summary` });
+                        });
+                    } else {
+                        const link = document.createElement('a');
+                        link.href = canvas.toDataURL('image/png');
+                        link.download = `Stock_Summary.png`;
+                        link.click();
+                    }
+                } catch (error) { 
+                    console.error(error); alert("Snapshot failed"); 
+                }
+            };
+
+            // DATA PREPARATION FOR REPORT
+            const getDailyReportStats = (targetDate) => {
+                const purchases = {};
+                const sales = {};
+                let totalInBoxes = 0;
+                let totalInLoose = 0;
+                let totalOutBoxes = 0;
+                let totalOutLoose = 0;
+
+                const dailyExpenses = expenses.filter(e => e.date === targetDate);
+                const totalExpenseAmount = dailyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+                savedTrips.filter(t => t.tripDate === targetDate).forEach(t => {
+                    const party = t.customerName || 'Unknown';
+                    const mode = t.operationMode;
+                    const tripExpenses = expenses.filter(e => e.tripId === t.id); 
+                    
+                    let items = [];
+                    if (t.detailedItems) {
+                        items = t.detailedItems.map(i => ({
+                            name: i.name, 
+                            boxes: Number(i.boxes) || 0, 
+                            looseKg: Number(i.looseKg) || 0 
+                        }));
+                    } else if (t.summary) {
+                        items = Object.entries(t.summary).map(([name, count]) => ({ 
+                            name, 
+                            boxes: Number(count) || 0, 
+                            looseKg: 0 
+                        }));
+                    }
+
+                    const targetObj = mode === 'Purchase' ? purchases : sales;
+                    
+                    if (!targetObj[party]) {
+                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [] };
+                    }
+
+                    items.forEach(i => {
+                        const existingItem = targetObj[party].items.find(x => x.name === i.name);
+                        if (existingItem) {
+                            existingItem.boxes += i.boxes;
+                            existingItem.looseKg += i.looseKg;
+                        } else {
+                            targetObj[party].items.push({ name: i.name, boxes: i.boxes, looseKg: i.looseKg });
+                        }
+                    });
+
+                    tripExpenses.forEach(exp => {
+                        targetObj[party].expenses.push(exp);
+                    });
+
+                    const tripBoxes = items.reduce((sum, i) => sum + i.boxes, 0);
+                    const tripLoose = items.reduce((sum, i) => sum + i.looseKg, 0);
+
+                    targetObj[party].totalBoxes += tripBoxes;
+                    targetObj[party].totalLoose += tripLoose;
+
+                    if (mode === 'Purchase') {
+                        totalInBoxes += tripBoxes;
+                        totalInLoose += tripLoose;
+                    } else {
+                        totalOutBoxes += tripBoxes;
+                        totalOutLoose += tripLoose;
+                    }
+                });
+
+                return { 
+                    purchases: Object.values(purchases), 
+                    sales: Object.values(sales), 
+                    totalInBoxes, totalInLoose, 
+                    totalOutBoxes, totalOutLoose,
+                    totalExpenseAmount,
+                    dailyExpenses 
+                };
+            };
+
+            const handleCapture = async () => {
+                if (!window.html2canvas || !captureRef.current) { 
+                    alert("Loading image tool..."); return; 
+                } 
+                try {
+                    window.scrollTo(0,0);
+                    const canvas = await window.html2canvas(captureRef.current, { 
+                        backgroundColor: '#ffffff', scale: 3, logging: false, useCORS: true 
+                    });
+                    const imgData = canvas.toDataURL('image/png');
+                    setGeneratedImage(imgData);
+                    
+                    if (navigator.share) {
+                        try {
+                            canvas.toBlob(async (blob) => {
+                                const file = new File([blob], "load-plan.png", { type: "image/png" });
+                                await navigator.share({ files: [file], title: 'Load Plan' });
+                            });
+                        } catch (err) {
+                            console.log("Share skipped or failed, falling back to display");
+                        }
+                    } 
+                } catch (error) { 
+                    console.error(error); alert("Image generation failed"); 
+                }
+            };
+            
+            const downloadImage = () => {
+                if (!generatedImage) return;
+                const link = document.createElement('a');
+                link.href = generatedImage;
+                link.download = `LoadPlan-${tripDate}.png`;
+                link.click();
+            }
+
+            // --- RENDERERS ---
+
+            const renderCell = (type, major, minor, label, isStatic) => {
+                const { count, max } = getStackStats(type, major, minor);
+                const isFull = count === max;
+                const isEmpty = count === 0;
+                const orientation = getStackOrientation(type, major, minor);
+
+                if (isStatic) {
+                    const stackContent = [];
+                    for (let h = max - 1; h >= 0; h--) {
+                        const box = getBox(type, major, minor, h);
+                        stackContent.push(
+                            <div key={h} className={`flex-1 flex items-center justify-center text-[9px] leading-none px-0.5 text-center overflow-hidden border-b border-white/20 last:border-0 ${box.filled ? 'bg-blue-600 text-white font-semibold' : 'bg-gray-100 text-gray-300'}`}>
+                                {box.filled ? (box.label || 'Item') : '-'}
+                            </div>
+                        );
+                    }
+                    const unitPixelHeight = orientation === 'Vertical' ? 30 : 24;
+                    const calculatedHeight = 16 + (max * unitPixelHeight);
+                    return (
+                        <div className={`relative w-full border border-gray-300 rounded overflow-hidden flex flex-col bg-gray-50 text-xs shadow-sm transition-all`} style={{ height: `${calculatedHeight}px` }}>
+                            <div className="bg-gray-200 text-gray-600 text-[8px] font-bold py-0.5 flex justify-between px-1 items-center">
+                                <span>{label}</span>
+                                <span className="font-extrabold text-blue-800">{orientation === 'Horizontal' ? 'H' : 'V'}</span>
+                            </div>
+                            <div className="flex-1 flex flex-col">{stackContent}</div>
+                        </div>
+                    );
+                } else {
+                    let bgColor = 'bg-gray-100';
+                    if (!isEmpty) bgColor = 'bg-blue-100';
+                    if (isFull) bgColor = 'bg-blue-500 text-white';
+                    const isSelected = selectedCell && selectedCell.type === type && 
+                                             ((type === 'lane' && selectedCell.laneId === major && selectedCell.stackIdx === minor) ||
+                                              (type === 'row' && selectedCell.rowIdx === major && selectedCell.colIdx === minor));
+                    if (isSelected) bgColor = 'ring-4 ring-yellow-400 ' + bgColor;
+                    const handleClick = () => {
+                        if (type === 'lane') setSelectedCell({ type: 'lane', laneId: major, stackIdx: minor });
+                        else setSelectedCell({ type: 'row', rowIdx: major, colIdx: minor });
+                    };
+                    return (
+                        <div onClick={handleClick} className={`relative h-16 w-full border-2 border-dashed border-gray-300 rounded-lg transition-all flex flex-col items-center justify-center cursor-pointer hover:shadow-md ${bgColor}`}>
+                            <span className="font-bold text-lg">{count}</span>
+                            <div className="absolute top-1 left-1 text-[10px] opacity-50 font-bold">{label}</div>
+                            <div className="absolute top-1 right-1">
+                                {orientation === 'Horizontal' ? <div className="text-[9px] font-black bg-white/50 px-1 rounded text-gray-600">H</div> : <div className="text-[9px] font-black bg-white/50 px-1 rounded text-gray-600">V</div>}
+                            </div>
+                            <div className="absolute bottom-1 flex gap-0.5 max-w-full overflow-hidden px-1">
+                                {[...Array(max)].map((_, i) => (<div key={i} className={`w-1 h-1 rounded-full ${i < count ? 'bg-green-400' : 'bg-gray-300'}`} />))}
+                            </div>
+                        </div>
+                    );
+                }
+            };
+
+            const renderVisualizer = (isStatic = false) => {
+                return (
+                    <div className="flex flex-col gap-6">
+                        {lanes.length > 0 && (
+                            <div>
+                                {!isStatic && <div className="flex items-center gap-2 text-xs font-bold text-blue-900 mb-2 border-b pb-1"><Layout size={14}/> MAIN COLUMNS (LANES)</div>}
+                                <div className="flex gap-2 w-full justify-between">
+                                    {lanes.map((lane) => (
+                                        <div key={lane.id} className="flex-1 flex flex-col gap-2 min-w-0">
+                                            {!isStatic && <div className="text-center text-[10px] font-bold text-gray-400 uppercase truncate">{lane.name}</div>}
+                                            {[...Array(lane.stacks)].map((_, stackIdx) => <div key={stackIdx}>{renderCell('lane', lane.id, stackIdx, `#${stackIdx+1}`, isStatic)}</div>)}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {rows.length > 0 && (
+                            <div>
+                                {!isStatic && <div className="flex items-center gap-2 text-xs font-bold text-orange-900 mb-2 border-b border-orange-200 pb-1 mt-4"><Grid size={14}/> IRREGULAR ROWS</div>}
+                                <div className="flex flex-col gap-4">
+                                    {rows.map((row, rIdx) => (
+                                        <div key={row.id} className="relative">
+                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R{rIdx+1}</div>
+                                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${row.cols}, minmax(0, 1fr))` }}>
+                                                {[...Array(row.cols)].map((_, cIdx) => <div key={cIdx}>{renderCell('row', rIdx, cIdx, `C${cIdx+1}`, isStatic)}</div>)}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {rows.length === 0 && lanes.length === 0 && <div className="text-center p-8 text-gray-400 italic">No layout configured. Go to Config tab.</div>}
                     </div>
-                    <div className="flex gap-2">
-                      <button className="text-sm px-2 py-1 border rounded" onClick={() => {
-                        // populate direct edit form from record
-                        setEditingTripId(t.id);
-                        setTripDate(t.tripDate);
-                        setOperationMode(t.operationMode);
-                        setDriverName(t.driverName || "");
-                        setCustomerName(t.customerName || "");
-                        setReferenceId(t.referenceId || "");
-                        setDirectItems(t.detailedItems && t.detailedItems.length ? t.detailedItems : Object.entries(t.summary || {}).map(([name,count])=>({name,boxes:count,looseKg:0})));
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}>Edit</button>
-                      <button className="text-red-500 px-2 py-1" onClick={() => deleteTrip(t.id)}><Trash2/></button>
+                );
+            };
+
+            const renderStackEditor = () => {
+                if (!selectedCell) return null;
+                let type, major, minor, title, subtitle;
+                type = selectedCell.type;
+
+                if (type === 'lane') {
+                    major = selectedCell.laneId; minor = selectedCell.stackIdx;
+                    const lane = lanes.find(l => l.id === major); if (!lane) return null;
+                    title = lane.name; subtitle = `Stack #${minor + 1}`;
+                } else {
+                    major = selectedCell.rowIdx; minor = selectedCell.colIdx;
+                    const row = rows[major]; if (!row) return null;
+                    title = `Row ${major + 1}`; subtitle = `Column ${minor + 1}`;
+                }
+
+                const heightLimit = getStackHeight(type, major, minor);
+                const orientation = getStackOrientation(type, major, minor);
+                const boxes = [];
+
+                for (let h = heightLimit - 1; h >= 0; h--) {
+                    const box = getBox(type, major, minor, h);
+                    boxes.push(
+                        <div key={h} className={`p-3 rounded border-2 mb-2 flex justify-between items-center transition-all ${box.filled ? 'bg-blue-600 border-blue-700 text-white shadow-md' : 'bg-white border-gray-200 text-gray-400 border-dashed'}`}>
+                            <div className="flex items-center gap-3"><span className="font-mono text-xs opacity-50">H{h+1}</span>{box.filled ? <div className="font-bold">{box.label}</div> : <div className="italic text-sm">Empty Slot</div>}</div>
+                            <div className="flex gap-2">
+                                {box.filled ? (<button onClick={() => updateBox(type, major, minor, h, { filled: false, label: '' })} className="p-1 hover:text-red-300"><Trash2 size={16} /></button>) : (<button onClick={() => updateBox(type, major, minor, h, { filled: true, label: batchInput || 'Unlabeled' })} className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Load</button>)}
+                            </div>
+                        </div>
+                    );
+                }
+                return (
+                    <div className="bg-gray-50 p-4 rounded-lg border shadow-inner">
+                         <div className="flex flex-col gap-3 mb-4 border-b pb-4">
+                            <div className="flex justify-between items-center">
+                                <div><h3 className="font-bold text-gray-800">{title}</h3><div className="text-xs text-gray-500">{subtitle}</div></div>
+                                <button onClick={() => fillStack(type, major, minor)} className="text-xs bg-blue-600 text-white px-3 py-2 rounded shadow hover:bg-blue-700 disabled:opacity-50 font-bold" disabled={!batchInput}>Fill All</button>
+                            </div>
+
+                            {/* Controls Row */}
+                            <div className="flex gap-2 mt-2">
+                                {/* Orientation */}
+                                <div className="flex-1 flex items-center justify-between bg-white p-2 rounded border">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Orientation</span>
+                                    <button onClick={() => toggleStackOrientation(type, major, minor)} className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold transition-colors ${orientation === 'Horizontal' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                                        {orientation === 'Horizontal' ? <GripHorizontal size={12}/> : <GripVertical size={12}/>} {orientation}
+                                    </button>
+                                </div>
+                                {/* Height Adjuster */}
+                                <div className="flex-1 flex items-center justify-between bg-white p-2 rounded border">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Capacity: {heightLimit}</span>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => adjustStackHeight(type, major, minor, -1)} className="text-red-500 hover:bg-red-50 rounded p-0.5"><MinusCircle size={16}/></button>
+                                        <button onClick={() => adjustStackHeight(type, major, minor, 1)} className="text-green-500 hover:bg-green-50 rounded p-0.5"><PlusCircle size={16}/></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {boxes}
+                        <div className="text-center text-xs text-gray-400 mt-2">Floor Level</div>
                     </div>
-                  </div>
+                );
+            };
+
+            const aggregatedStats = getAggregatedStats();
+
+            // --- UI ---
+            return (
+                <div className="flex flex-col h-full w-full bg-gray-100 max-w-md mx-auto shadow-2xl overflow-hidden font-sans">
+                    {/* Header */}
+                    <div className={`text-white p-4 flex justify-between items-center shadow-lg z-10 ${operationMode === 'Sales' ? 'bg-blue-900' : 'bg-green-800'}`}>
+                        <div className="flex items-center gap-2">
+                            {operationMode === 'Sales' ? <ArrowUpCircle size={24} className="text-blue-300"/> : <ArrowDownCircle size={24} className="text-green-300"/>}
+                            <div><h1 className="font-bold text-lg leading-tight">VAR Load Planner</h1><div className="flex flex-col leading-none"><span className="text-xs text-white/80 font-bold uppercase tracking-widest">{operationMode}</span></div></div>
+                        </div>
+                        <div className="text-right text-xs">
+                            <div className="uppercase font-bold text-white/60">Cloud Mode</div>
+                            <div className={`flex items-center justify-end gap-1 ${isOffline ? 'text-red-300' : 'text-green-300'}`}><Cloud size={10}/> {isOffline ? 'Offline' : 'Connected'}</div>
+                        </div>
+                    </div>
+
+                    {activeTab === 'visualizer' && (
+                        <div className="bg-white p-3 shadow-sm z-10">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Item Name / ఐటమ్ పేరు</label>
+                            <div className="flex gap-2 mt-1">
+                                <input type="text" placeholder="e.g. Farmer Ramu - 500g" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={batchInput} onChange={(e) => setBatchInput(e.target.value)} />
+                                <button onClick={manualResetGrid} className="bg-red-50 text-red-600 p-2 rounded border border-red-100 hover:bg-red-100 transition-colors flex items-center gap-1"><RotateCcw size={18} /></button>
+                            </div>
+                            {/* NEW: Stock Check Button in Visualizer */}
+                            <button onClick={() => setSelectedItemHistory('ALL_ITEMS_VIEW')} className="mt-2 w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-700 py-2 rounded border border-blue-200 text-xs font-bold hover:bg-blue-100">
+                                <BoxIcon size={14}/> Check Available Stock / బ్యాలెన్స్ స్టాక్ చూడండి
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="flex-1 overflow-y-auto p-4 relative bg-gray-50">
+                        {activeTab === 'visualizer' && (
+                            <>
+                                {selectedCell && (<div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setSelectedCell(null)}><div className="bg-white w-full max-w-md p-4 rounded-t-xl sm:rounded-xl animate-slide-up" onClick={e => e.stopPropagation()}><div className="flex justify-between items-center mb-2"><h3 className="font-bold text-gray-700">Editing Stack</h3><button onClick={() => setSelectedCell(null)} className="text-gray-500 p-2">Close</button></div>{renderStackEditor()}</div></div>)}
+                                <div className="mt-2">
+                                    {(targetBoxCount || referenceId || customerName) && (
+                                        <div className={`mb-6 rounded border transition-all ${aggregatedStats.total > parseInt(targetBoxCount || 99999) && targetBoxCount ? 'bg-red-50 border-red-200 text-red-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+                                            <div className="p-3 flex justify-between items-center">
+                                                <div className="flex flex-col"><span className="text-[10px] uppercase font-bold opacity-60">Target / లక్ష్యం</span><span className="font-bold text-lg leading-none">{targetBoxCount || '-'}</span></div>
+                                                <div className="text-center"><div className="text-2xl font-black">{getManifestData().totalBoxes}</div><div className="text-[9px] uppercase font-bold">Current Load</div></div>
+                                                <div className="flex flex-col items-end"><span className="text-[10px] uppercase font-bold opacity-60">Aggr. Total</span><span className="font-bold text-lg leading-none">{aggregatedStats.total}</span></div>
+                                            </div>
+                                            <button onClick={() => setShowAggregatedDetails(!showAggregatedDetails)} className="w-full flex items-center justify-center gap-1 py-1 text-[10px] font-bold uppercase bg-white/50 hover:bg-white/80 border-t border-blue-100">{showAggregatedDetails ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}{showAggregatedDetails ? 'Hide Item Details' : 'View Item Totals'}</button>
+                                            {showAggregatedDetails && (<div className="p-3 bg-white border-t border-blue-100 text-xs space-y-1 animate-fade-in"><div className="font-bold text-gray-400 mb-2 uppercase text-[10px]">Total Boxes by Item (Aggregated)</div>{Object.entries(aggregatedStats.items).length === 0 ? <div className="italic opacity-50">No items found</div> : Object.entries(aggregatedStats.items).map(([item, count]) => (<div key={item} className="flex justify-between"><span>{item}</span><span className="font-bold">{count}</span></div>))}<div className="mt-2 pt-2 border-t text-[10px] text-gray-400 italic text-center">Includes current load + {aggregatedStats.tripCount} saved trips today</div></div>)}
+                                        </div>
+                                    )}
+                                    {renderVisualizer(false)}
+                                    <div className="mt-8 text-center"><div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 rounded-full text-gray-600 text-sm font-bold"><ArrowRight className="rotate-90" size={16} /> Front of Vehicle (Cabin)</div></div>
+                                </div>
+                            </>
+                        )}
+
+                        {activeTab === 'share' && (
+                            // ... share tab content ...
+                            <div className="flex flex-col h-full">
+                                <div className="mb-4 flex flex-col gap-2">
+                                    <button onClick={handleCapture} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-blue-700">{generatedImage ? <RefreshCw size={20}/> : <Camera size={20} />}{generatedImage ? "Re-Generate" : "Snap Picture"}</button>
+                                    {generatedImage && (
+                                        <div className="text-center p-4 bg-white rounded border border-blue-200 animate-fade-in">
+                                            <div className="text-sm text-gray-600 mb-2 font-bold">Preview Ready</div>
+                                            <img src={generatedImage} alt="Load Plan" className="w-full border rounded shadow-sm mb-4" />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                 <button onClick={downloadImage} className="w-full bg-blue-600 text-white py-2 rounded font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Download size={16} /> Download</button>
+                                                 <button onClick={manualResetGrid} className="w-full bg-green-500 text-white py-2 rounded font-bold flex items-center justify-center gap-2 hover:bg-green-600"><RotateCcw size={16} /> New Load</button>
+                                            </div>
+                                            <button onClick={() => setGeneratedImage(null)} className="mt-3 text-xs text-blue-500 underline block w-full text-center">Close Preview</button>
+                                        </div>
+                                    )}
+                                </div>
+                                {!generatedImage && (
+                                    <div className="overflow-auto bg-white rounded-xl shadow-sm border p-1">
+                                        <div ref={captureRef} className="bg-white p-6 min-h-[600px]">
+                                            <div className={`border-b-2 pb-4 mb-6 flex justify-between items-start ${operationMode === 'Sales' ? 'border-blue-900' : 'border-green-800'}`}>
+                                                <div>
+                                                    <h1 className={`text-2xl font-black uppercase tracking-wider ${operationMode === 'Sales' ? 'text-blue-900' : 'text-green-900'}`}>VAR Load Planner</h1>
+                                                    <div className="mt-1 flex flex-col">
+                                                        {driverName && <span className="text-gray-600 text-sm font-bold flex items-center gap-1"><User size={14}/> {driverName}</span>}
+                                                        {customerName && <span className="text-gray-600 text-xs font-medium flex items-center gap-1"><Users size={14}/> {customerName}</span>}
+                                                        {referenceId && <span className="text-gray-400 text-xs font-medium flex items-center gap-1 mt-1">REF: {referenceId}</span>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-2">
+                                                    <div className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold uppercase border ${operationMode === 'Sales' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-green-100 text-green-800 border-green-200'}`}>{operationMode === 'Sales' ? <ArrowUpCircle size={12}/> : <ArrowDownCircle size={12}/>} {operationMode}</div>
+                                                    {varBoxCount && (<div className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 rounded text-[10px] font-bold border border-purple-200"><BoxSelect size={12}/> VAR Box: {varBoxCount}</div>)}
+                                                    <div className="text-right"><div className="text-xs text-gray-400">Date</div><div className="font-mono font-bold text-gray-800">{tripDate}</div></div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-4 mb-6">
+                                                <div className="flex-1 bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm"><h3 className="font-bold text-gray-700 border-b pb-2 mb-2 flex items-center gap-2"><FileText size={16}/> Summary (Item-wise)</h3><div className="space-y-1">{Object.keys(getManifestData().summary).length === 0 ? <div className="text-gray-400 italic text-xs">No boxes loaded yet</div> : Object.keys(getManifestData().summary).map(key => (<div key={key} className="flex justify-between text-xs"><span className="text-gray-600">{key}</span><span className="font-bold">{getManifestData().summary[key]}</span></div>))}</div></div>
+                                                <div className={`w-1/3 text-white p-4 rounded-lg flex flex-col items-center justify-center text-center shadow-lg ${operationMode === 'Sales' ? 'bg-blue-900' : 'bg-green-800'}`}>{targetBoxCount ? (<><div className="text-3xl font-black">{getManifestData().totalBoxes}</div><div className="text-[9px] opacity-80 mb-1">of {targetBoxCount} Loaded</div><div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getManifestData().totalBoxes == targetBoxCount ? 'bg-green-400 text-green-900' : 'bg-white text-black'}`}>{getManifestData().totalBoxes - parseInt(targetBoxCount) > 0 ? '+' : ''}{getManifestData().totalBoxes - parseInt(targetBoxCount)}</div></>) : (<><Package size={24} className="mb-1 opacity-80"/><div className="text-[10px] uppercase font-bold tracking-widest opacity-70">Total Loaded</div><div className="text-4xl font-black">{getManifestData().totalBoxes}</div><div className="text-[9px] mt-1 opacity-70">Boxes</div></>)}</div>
+                                            </div>
+                                            <div className="pl-4 relative"><div className="absolute left-0 top-1/2 -translate-y-1/2 -rotate-90 text-xs font-bold text-gray-300 tracking-widest -ml-6">DRIVER SIDE</div>{renderVisualizer(true)}</div>
+                                            <div className="mt-8 text-center text-xs text-gray-300">Generated via Operations App</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'manifest' && (
+                            <div className="bg-white p-4 rounded shadow h-full overflow-auto flex flex-col">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><FileText size={20} /> Load Manifest</h3>
+                                <pre className="bg-gray-100 p-4 rounded text-xs font-mono whitespace-pre-wrap border border-gray-200 flex-1">{generateManifest()}</pre>
+                                <div className="mt-4 grid grid-cols-2 gap-2">
+                                    <button onClick={() => { navigator.clipboard.writeText(generateManifest()); alert('Copied!'); }} className="bg-blue-900 text-white py-3 rounded font-bold flex items-center justify-center gap-2 hover:bg-blue-800"><Save size={18} /> Copy Text</button>
+                                    <button onClick={saveTrip} className="bg-green-600 text-white py-3 rounded font-bold flex items-center justify-center gap-2 hover:bg-green-700"><Database size={18} /> Save Trip</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- DAILY REPORT TAB --- */}
+                        {activeTab === 'daily' && (
+                            <div className="bg-white p-4 rounded shadow h-full overflow-auto flex flex-col relative">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4"><ImageIcon size={20} className="text-purple-600"/> Daily Activity</h3>
+                                
+                                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm mb-6">
+                                    <p className="text-xs text-gray-500 mb-3">Generate a visual report of Purchase vs Sales for a specific day.</p>
+                                    <div className="flex gap-2">
+                                        <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="border p-2 rounded text-sm flex-1"/>
+                                        <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center gap-2 justify-center"><FilePdf size={16}/> Download PDF Report</button>
+                                    </div>
+                                </div>
+
+                                {/* NEW: EXPENSE TRACKER SECTION */}
+                                <div className="p-4 bg-white border-2 border-orange-100 rounded-lg shadow-sm">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-3 text-sm"><Wallet size={16} className="text-orange-500"/> Daily Expenses</h3>
+                                    
+                                    {/* Quick Categories */}
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                        {['Ice', 'Driver Beta', 'Labour', 'Transport', 'Other'].map(cat => (
+                                            <button 
+                                                key={cat} 
+                                                onClick={() => setExpenseCategory(cat)}
+                                                className={`text-xs py-2 px-1 rounded border font-bold ${expenseCategory === cat ? 'bg-orange-500 text-white border-orange-600' : 'bg-gray-50 text-gray-600 border-gray-200'}`}
+                                            >
+                                                {cat}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Input Row */}
+                                    <div className="flex gap-2 mb-4">
+                                        <div className="relative flex-1">
+                                            <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"><IndianRupee size={12}/></div>
+                                            <input 
+                                                type="number" 
+                                                placeholder="Amount" 
+                                                value={expenseAmount}
+                                                onChange={e => setExpenseAmount(e.target.value)}
+                                                className="w-full pl-6 pr-2 py-2 border rounded text-sm font-bold outline-none focus:ring-1 focus:ring-orange-500"
+                                            />
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Note (Optional)" 
+                                            value={expenseNote}
+                                            onChange={e => setExpenseNote(e.target.value)}
+                                            className="flex-1 border rounded px-2 text-xs"
+                                        />
+                                        <button onClick={addExpense} className="bg-orange-500 text-white px-3 rounded font-bold hover:bg-orange-600"><Plus size={18}/></button>
+                                    </div>
+
+                                    {/* Today's Expense List */}
+                                    <div className="border-t pt-2">
+                                        <div className="text-[10px] text-gray-400 font-bold uppercase mb-2">Expenses for {reportDate}</div>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                                            {expenses.filter(e => e.date === reportDate).length === 0 ? (
+                                                <div className="text-center text-xs text-gray-300 italic">No expenses added today</div>
+                                            ) : (
+                                                expenses.filter(e => e.date === reportDate).map(exp => (
+                                                    <div key={exp.id} className="flex justify-between items-center bg-orange-50 p-2 rounded border border-orange-100 text-xs">
+                                                        <div>
+                                                            <div className="font-bold text-gray-700">{exp.category}</div>
+                                                            {exp.note && <div className="text-[10px] text-gray-500">{exp.note}</div>}
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="font-bold text-orange-700">₹{exp.amount}</span>
+                                                            <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        <div className="mt-2 text-right font-bold text-sm text-gray-800">
+                                            Total: ₹{expenses.filter(e => e.date === reportDate).reduce((sum, e) => sum + (e.amount || 0), 0)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- RECORDS TAB --- */}
+                        {(activeTab === 'records' || selectedItemHistory === 'ALL_ITEMS_VIEW') && (
+                            <div className={`bg-white p-4 rounded shadow h-full overflow-auto flex flex-col relative ${selectedItemHistory === 'ALL_ITEMS_VIEW' ? 'fixed inset-0 z-50 m-4' : ''}`}>
+                                {selectedItemHistory === 'ALL_ITEMS_VIEW' && (
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-gray-800 flex items-center gap-2"><BoxIcon size={20} /> Stock Overview</h3>
+                                        <button onClick={() => setSelectedItemHistory(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                                    </div>
+                                )}
+
+                                {selectedItemHistory && selectedItemHistory !== 'ALL_ITEMS_VIEW' ? (
+                                    <div className="animate-fade-in flex flex-col h-full">
+                                        <button onClick={() => setSelectedItemHistory(null)} className="mb-4 text-xs font-bold text-gray-500 flex items-center gap-1 hover:text-gray-800">
+                                            <ArrowRight className="rotate-180" size={14} /> Back to Overview
+                                        </button>
+                                        <h3 className="font-bold text-lg text-blue-900 mb-1">{selectedItemHistory}</h3>
+                                        <div className="text-xs text-gray-500 mb-4">Transaction History</div>
+                                        
+                                        <div className="flex-1 overflow-auto border rounded-lg">
+                                            <table className="w-full text-xs text-left">
+                                                <thead className="bg-gray-50 text-gray-500 sticky top-0 z-10">
+                                                    <tr>
+                                                        <th className="p-2">Date</th>
+                                                        <th className="p-2">Party</th>
+                                                        <th className="p-2 text-right">Qty</th>
+                                                        <th className="p-2 text-right">Mode</th>
+                                                        <th className="p-2 text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {savedTrips
+                                                        .filter(t => (t.detailedItems && t.detailedItems.some(i => i.name === selectedItemHistory)) || (t.summary && t.summary[selectedItemHistory]))
+                                                        .map(t => {
+                                                            let qtyDisplay = '';
+                                                            if (t.detailedItems) {
+                                                                const item = t.detailedItems.find(i => i.name === selectedItemHistory);
+                                                                if(item) qtyDisplay = `${item.boxes} Bx ${item.looseKg ? `+${item.looseKg}Kg` : ''}`;
+                                                            } else {
+                                                                qtyDisplay = `${t.summary[selectedItemHistory]} Bx`;
+                                                            }
+                                                            return (
+                                                                <tr key={t.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                                    <td className="p-2">
+                                                                        <div className="font-bold">{t.tripDate}</div>
+                                                                        <div className="text-[10px] text-gray-400">#{t.referenceId || '-'}</div>
+                                                                    </td>
+                                                                    <td className="p-2 truncate max-w-[100px]">{t.customerName || 'Unknown'}</td>
+                                                                    <td className="p-2 text-right font-mono font-bold text-[10px]">{qtyDisplay}</td>
+                                                                    <td className="p-2 text-right">
+                                                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${t.operationMode === 'Purchase' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                                            {t.operationMode === 'Purchase' ? 'IN' : 'OUT'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-2 text-right">
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            <button onClick={(e) => { e.stopPropagation(); openEditRecord(t); }} className="text-blue-500 bg-blue-50 p-1.5 rounded hover:bg-blue-100"><Pencil size={14}/></button>
+                                                                            <button onClick={(e) => { e.stopPropagation(); deleteTrip(t.id); }} className="text-red-500 bg-red-50 p-1.5 rounded hover:bg-red-100"><Trash2 size={14}/></button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {activeTab === 'records' && (
+                                            <>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h3 className="font-bold text-gray-800 flex items-center gap-2"><BarChart3 size={20} /> Stock & Records</h3>
+                                                </div>
+
+                                                <div className="bg-gray-900 text-white p-4 rounded-xl mb-4 shadow-lg">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <div className="text-xs text-gray-400 uppercase font-bold tracking-wider">Inventory Overview</div>
+                                                        <div className="bg-gray-800 px-2 py-1 rounded text-[10px] font-mono text-gray-300">Total History</div>
+                                                    </div>
+                                                    <div className="flex justify-between items-end">
+                                                        <div className="text-center"><div className="text-2xl font-black text-green-400">{stockTotals.purchased}</div><div className="text-[10px] text-gray-400 uppercase font-bold mt-1">Inward</div></div>
+                                                        <div className="pb-4 text-gray-600"><ArrowRight size={20}/></div>
+                                                        <div className="text-center"><div className="text-2xl font-black text-blue-400">{stockTotals.sold}</div><div className="text-[10px] text-gray-400 uppercase font-bold mt-1">Outward</div></div>
+                                                        <div className="h-10 w-px bg-gray-700 mx-2"></div>
+                                                        <div className="text-right"><div className="text-3xl font-black text-white">{stockTotals.balance}</div><div className="text-[10px] text-yellow-500 uppercase font-bold mt-1">Current Stock</div></div>
+                                                    </div>
+                                                </div>
+
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingTripId(null);
+                                                        setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
+                                                        setShowDirectEntry(true);
+                                                    }} 
+                                                    className="w-full mb-6 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all"
+                                                >
+                                                    <FilePlus size={20} /> Add Direct Purchase / Sale (No Truck)
+                                                </button>
+                                            </>
+                                        )}
+
+                                        <div className={`mb-6 border border-gray-200 rounded-lg bg-gray-50 overflow-hidden ${selectedItemHistory === 'ALL_ITEMS_VIEW' ? 'flex-1 flex flex-col h-full' : ''}`}>
+                                            {activeTab === 'records' && (
+                                                <button onClick={() => setShowItemStock(!showItemStock)} className="w-full flex justify-between items-center p-3 bg-white hover:bg-gray-50 transition-colors">
+                                                    <div className="text-xs font-bold text-gray-600 uppercase flex items-center gap-2"><BoxIcon size={14} className="text-blue-500"/> Item-wise Balance Report</div>
+                                                    {showItemStock ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+                                                </button>
+                                            )}
+                                            {(showItemStock || selectedItemHistory === 'ALL_ITEMS_VIEW') && (
+                                                <div className={`p-2 animate-fade-in ${selectedItemHistory === 'ALL_ITEMS_VIEW' ? 'flex-1 flex flex-col h-full' : ''}`}>
+                                                    {Object.entries(stockTotals.itemStats).length === 0 ? (
+                                                        <div className="text-center text-gray-400 text-xs italic py-2">No items found in history.</div>
+                                                    ) : (
+                                                        // UPDATED: Forced fixed height on records tab to ensure scroll.
+                                                        <div className={`${selectedItemHistory === 'ALL_ITEMS_VIEW' ? 'flex-1 h-full' : 'h-[350px]'} overflow-y-auto relative rounded border border-gray-200 shadow-inner bg-white touch-pan-y custom-scroll`}>
+                                                            <div ref={stockCaptureRef} className="bg-white min-h-full">
+                                                                <table className="w-full text-xs border-collapse">
+                                                                    <thead className="sticky top-0 z-20 shadow-sm">
+                                                                        <tr className="text-[10px] uppercase text-gray-500 border-b bg-gray-100">
+                                                                            <th className="text-left p-2">Item</th>
+                                                                            <th className="text-right p-2 text-green-700 bg-green-50/50">In</th>
+                                                                            <th className="text-right p-2 text-blue-700 bg-blue-50/50">Out</th>
+                                                                            <th className="text-right p-2 text-gray-800 bg-gray-50/50">Bal</th>
+                                                                            <th className="w-6"></th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="bg-white divide-y divide-gray-100">
+                                                                        {Object.entries(stockTotals.itemStats).map(([item, stats]) => {
+                                                                            const balBoxes = stats.in.boxes - stats.out.boxes;
+                                                                            const balLoose = stats.in.loose - stats.out.loose;
+                                                                            const isNeg = balBoxes < 0 || (balBoxes === 0 && balLoose < 0);
+                                                                            
+                                                                            return (
+                                                                                <tr key={item} onClick={() => setSelectedItemHistory(item)} className="hover:bg-blue-50 cursor-pointer group transition-colors">
+                                                                                    <td className="p-2 font-bold text-gray-700 group-hover:text-blue-700 align-top pt-2.5">{item}</td>
+                                                                                    <td className="p-2 text-right bg-green-50/20 align-top">
+                                                                                        {renderQtyCell(stats.in.boxes, stats.in.loose, "text-green-700")}
+                                                                                    </td>
+                                                                                    <td className="p-2 text-right bg-blue-50/20 align-top">
+                                                                                        {renderQtyCell(stats.out.boxes, stats.out.loose, "text-blue-700")}
+                                                                                    </td>
+                                                                                    <td className="p-2 text-right bg-gray-50/20 align-top">
+                                                                                        <div className={`flex flex-col items-end leading-tight ${isNeg ? 'text-red-600' : 'text-gray-800'}`}>
+                                                                                            <span className="font-bold">{balBoxes} Bx</span>
+                                                                                            {balLoose !== 0 && <span className={`text-[9px] ${isNeg ? 'text-red-400' : 'text-gray-400'}`}>{balLoose > 0 ? '+' : ''}{balLoose} Kg</span>}
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td className="p-2 text-gray-300 group-hover:text-blue-400 align-middle"><ChevronRight size={14}/></td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                    </tbody>
+                                                                    <tfoot className="sticky bottom-0 z-20 shadow-[0_-2px_4px_rgba(0,0,0,0.1)]">
+                                                                        <tr className="bg-gray-800 border-t-2 border-gray-600 font-bold text-[11px] text-white">
+                                                                            <td className="p-2 uppercase tracking-wider">TOTALS</td>
+                                                                            <td className="p-2 text-right text-green-300">
+                                                                                <div>{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.in.boxes, 0)} Bx</div>
+                                                                                <div className="text-[9px] opacity-70">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.in.loose, 0)} Kg</div>
+                                                                            </td>
+                                                                            <td className="p-2 text-right text-blue-300">
+                                                                                <div>{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.out.boxes, 0)} Bx</div>
+                                                                                <div className="text-[9px] opacity-70">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.out.loose, 0)} Kg</div>
+                                                                            </td>
+                                                                            <td className="p-2 text-right">
+                                                                                <div>{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + (s.in.boxes - s.out.boxes), 0)} Bx</div>
+                                                                                <div className="text-[9px] opacity-70 text-gray-300">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + (s.in.loose - s.out.loose), 0)} Kg</div>
+                                                                            </td>
+                                                                            <td></td>
+                                                                        </tr>
+                                                                    </tfoot>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* NEW SNAPSHOT BUTTON FOR ITEM REPORT */}
+                                            {activeTab === 'records' && (
+                                                <button onClick={() => setShowStockSnapshotModal(true)} className="w-full mt-2 bg-blue-50 text-blue-600 border border-blue-200 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 hover:bg-blue-100">
+                                                    <Camera size={14}/> 📸 Snap Full Stock List
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {activeTab === 'records' && (
+                                            <div className="flex-1 space-y-3 overflow-y-auto">
+                                                {savedTrips.length === 0 && <div className="text-center text-gray-400 text-xs italic py-10">No records found.</div>}
+                                                {savedTrips
+                                                    .slice(0, visibleRecords)
+                                                    .map(t => (
+                                                    <div key={t.id} className={`border rounded-lg p-3 hover:bg-gray-50 text-xs ${t.operationMode === 'Sales' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500'}`}>
+                                                        <div className="flex justify-between items-start mb-2 cursor-pointer" onClick={() => setExpandedTripId(expandedTripId === t.id ? null : t.id)}>
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-gray-700">{t.tripDate}</span>
+                                                                <span className="text-[10px] text-gray-400">{t.customerName || 'Unknown'}</span>
+                                                                {t.isDirectEntry && <span className="inline-block mt-1 px-1 py-0.5 bg-purple-100 text-purple-800 rounded text-[9px] font-bold w-fit">DIRECT</span>}
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className={`font-bold text-lg leading-none ${t.operationMode === 'Sales' ? 'text-blue-600' : 'text-green-600'}`}>{t.operationMode === 'Sales' ? '-' : '+'}{t.totalBoxes}</div>
+                                                                <span className="font-mono bg-gray-200 px-1.5 rounded text-[9px] mt-1 inline-block">#{t.referenceId || '---'}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {expandedTripId === t.id && (
+                                                            <div className="mt-2 pt-2 border-t border-gray-100 animate-fade-in">
+                                                                <div className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Trip Breakdown</div>
+                                                                {t.detailedItems ? (
+                                                                    <div className="overflow-x-auto">
+                                                                        <table className="w-full text-xs text-left mb-2">
+                                                                            <thead className="bg-gray-50 text-gray-500">
+                                                                                <tr>
+                                                                                    <th className="p-1">Item</th>
+                                                                                    <th className="p-1 text-center">Box</th>
+                                                                                    <th className="p-1 text-center">Loose</th>
+                                                                                    <th className="p-1 text-right">Total Kg</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {t.detailedItems.map((item, idx) => (
+                                                                                    <tr key={idx} className="border-b last:border-0">
+                                                                                        <td className="p-1 font-bold">{item.name}</td>
+                                                                                        <td className="p-1 text-center">{item.boxes}</td>
+                                                                                        <td className="p-1 text-center text-gray-400">{item.looseKg > 0 ? item.looseKg : '-'}</td>
+                                                                                        <td className="p-1 text-right font-mono">{item.totalWeight}</td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="grid grid-cols-2 gap-1">
+                                                                        {t.summary ? Object.entries(t.summary).map(([item, count]) => (
+                                                                            <div key={item} className="flex justify-between bg-gray-50 px-2 py-1 rounded">
+                                                                                <span className="text-gray-600">{item}</span>
+                                                                                <span className="font-bold">{count}</span>
+                                                                            </div>
+                                                                        )) : <div className="text-gray-400 italic">No details</div>}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex justify-end mt-2 gap-2">
+                                                                    <button onClick={(e) => { e.stopPropagation(); openEditRecord(t); }} className="text-blue-600 text-[10px] flex items-center gap-1 hover:bg-blue-50 px-2 py-1 rounded"><Pencil size={12}/> Edit</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); deleteTrip(t.id); }} className="text-red-500 text-[10px] flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded"><Trash2 size={12}/> Delete</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {visibleRecords < savedTrips.length && (
+                                                    <button onClick={() => setVisibleRecords(prev => prev + 20)} className="w-full py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded hover:bg-gray-200">Show More Records</button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* --- DAILY REPORT MODAL --- */}
+                                        {showReportModal && (
+                                            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                                                <div className="bg-white w-full max-w-4xl p-4 rounded-xl shadow-2xl flex flex-col max-h-[95vh]">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="font-bold text-lg">Report Preview</h3>
+                                                        <button onClick={() => setShowReportModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
+                                                    </div>
+                                                    
+                                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
+                                                        {/* REPORT CONTAINER FOR CAPTURE */}
+                                                        <div ref={reportCaptureRef} className="bg-white p-6 w-full max-w-2xl shadow-lg text-sm text-gray-800">
+                                                            <div className="text-center border-b-2 border-gray-300 pb-4 mb-4">
+                                                                <h1 className="text-2xl font-black uppercase text-gray-800">Daily Activity Report</h1>
+                                                                <div className="text-gray-500 font-bold mt-1">{reportDate}</div>
+                                                            </div>
+                                                            
+                                                            {(() => {
+                                                                const stats = getDailyReportStats(reportDate);
+                                                                return (
+                                                                    <div className="grid grid-cols-2 gap-4">
+                                                                        {/* LEFT: PURCHASE */}
+                                                                        <div className="flex flex-col border-r border-gray-300 pr-4">
+                                                                            <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase (Inward)</h2>
+                                                                            <div className="space-y-3 flex-1">
+                                                                                {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
+                                                                                {stats.purchases.map((p, idx) => (
+                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                            <span>{p.name}</span>
+                                                                                            <span className="text-green-700">{p.totalBoxes} Bx <span className="text-[10px] text-gray-400">({p.totalLoose}kg)</span></span>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            {p.items.map((it, i) => (
+                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                    <span>{it.name}</span>
+                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                            <div className="mt-4 pt-2 border-t-2 border-green-200">
+                                                                                <div className="flex justify-between text-lg font-black text-green-900">
+                                                                                    <span>Total In:</span>
+                                                                                    <div className="text-right">
+                                                                                        <div>{stats.totalInBoxes} Boxes</div>
+                                                                                        <div className="text-xs opacity-50">+{stats.totalInLoose} Kg Loose</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* RIGHT: SALES */}
+                                                                        <div className="flex flex-col pl-4">
+                                                                            <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (Outward)</h2>
+                                                                            <div className="space-y-3 flex-1">
+                                                                                {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
+                                                                                {stats.sales.map((s, idx) => (
+                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                            <span>{s.name}</span>
+                                                                                            <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            {s.items.map((it, i) => (
+                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                    <span>{it.name}</span>
+                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                            <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                    <span>Total Out:</span>
+                                                                                    <div className="text-right">
+                                                                                        <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                        <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                            
+                                                            {/* FOOTER: EXPENSE SUMMARY */}
+                                                            <div className="mt-8 border-t-4 border-gray-800 pt-6">
+                                                                <h2 className="text-left font-black text-xl text-gray-800 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                                                                    <span className="bg-orange-500 text-white px-2 py-1 rounded text-sm">₹</span> Expense Report
+                                                                </h2>
+                                                                
+                                                                {getDailyReportStats(reportDate).totalExpenseAmount > 0 ? (
+                                                                    <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                                                                        <tfoot className="bg-orange-50 font-black text-lg text-orange-900 border-t-2 border-orange-200">
+                                                                            <tr>
+                                                                                <td colSpan="2" className="p-3 text-right uppercase">Total Expenses</td>
+                                                                                <td className="p-3 text-right">₹{getDailyReportStats(reportDate).totalExpenseAmount}</td>
+                                                                            </tr>
+                                                                        </tfoot>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="p-6 text-center bg-gray-50 rounded border border-gray-200 text-gray-400 italic">No expenses recorded for this date.</div>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-xs text-gray-400 uppercase tracking-widest">
+                                                                <span>Nellore Truck Loader App</span>
+                                                                <span>Generated: {new Date().toLocaleString()}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="mt-4 flex justify-end gap-2">
+                                                        <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download High-Res PDF</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* --- FULL STOCK SNAPSHOT MODAL --- */}
+                                        {showStockSnapshotModal && (
+                                            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                                                <div className="bg-white w-full max-w-md p-4 rounded-xl shadow-2xl flex flex-col max-h-[95vh]">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="font-bold text-lg">Stock List Snapshot</h3>
+                                                        <button onClick={() => setShowStockSnapshotModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
+                                                    </div>
+                                                    <div className="flex-1 overflow-auto bg-gray-100 p-2 rounded border">
+                                                        <div ref={stockCaptureRef} className="bg-white p-4">
+                                                            <div className="text-center border-b pb-2 mb-2">
+                                                                <h2 className="font-black text-xl uppercase">Full Stock Report</h2>
+                                                                <div className="text-xs text-gray-500">{new Date().toDateString()}</div>
+                                                            </div>
+                                                            <table className="w-full text-xs border-collapse">
+                                                                <thead>
+                                                                    <tr className="text-[10px] uppercase text-gray-500 border-b bg-gray-50">
+                                                                        <th className="text-left p-2">Item</th>
+                                                                        <th className="text-right p-2 text-green-700">In</th>
+                                                                        <th className="text-right p-2 text-blue-700">Out</th>
+                                                                        <th className="text-right p-2 text-black">Bal</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-gray-100">
+                                                                    {Object.entries(stockTotals.itemStats).map(([item, stats]) => {
+                                                                        const balBoxes = stats.in.boxes - stats.out.boxes;
+                                                                        const balLoose = stats.in.loose - stats.out.loose;
+                                                                        return (
+                                                                            <tr key={item}>
+                                                                                <td className="p-2 font-bold text-gray-700">{item}</td>
+                                                                                <td className="p-2 text-right">{renderQtyCell(stats.in.boxes, stats.in.loose, "")}</td>
+                                                                                <td className="p-2 text-right">{renderQtyCell(stats.out.boxes, stats.out.loose, "")}</td>
+                                                                                <td className="p-2 text-right font-bold">
+                                                                                    <div>{balBoxes} Bx</div>
+                                                                                    {balLoose !== 0 && <div className="text-[9px] text-gray-400">{balLoose > 0 ? '+' : ''}{balLoose} Kg</div>}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                                <tfoot className="border-t-2 border-black">
+                                                                    <tr className="font-bold">
+                                                                        <td className="p-2 uppercase">Total</td>
+                                                                        <td className="p-2 text-right">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.in.boxes, 0)}</td>
+                                                                        <td className="p-2 text-right">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.out.boxes, 0)}</td>
+                                                                        <td className="p-2 text-right">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + (s.in.boxes - s.out.boxes), 0)}</td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-4">
+                                                        <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Camera size={20}/> Share Image</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* --- DIRECT ENTRY / EDIT MODAL --- */}
+                                        {showDirectEntry && (
+                                            <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+                                                <div className="bg-white w-full max-w-md p-4 rounded-xl animate-slide-up flex flex-col max-h-[90vh] shadow-2xl">
+                                                    <div className="flex justify-between items-center mb-4 pb-2 border-b">
+                                                        <h3 className="font-bold text-gray-800 flex items-center gap-2"><FilePlus size={20}/> {editingTripId ? "Edit Record" : "Direct Entry"}</h3>
+                                                        <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="text-gray-500 p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                                                    </div>
+
+                                                    <div className="space-y-3 overflow-y-auto flex-1">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Date</label>
+                                                                <input type="date" value={directData.date} onChange={e => setDirectData({...directData, date: e.target.value})} className="w-full border p-2 rounded text-sm font-bold"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Mode</label>
+                                                                <select value={directData.mode} onChange={e => setDirectData({...directData, mode: e.target.value})} className="w-full border p-2 rounded text-sm font-bold bg-white">
+                                                                    <option value="Purchase">Purchase</option>
+                                                                    <option value="Sales">Sales</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Ref / Bill No</label>
+                                                                <input type="text" value={directData.refId} onChange={e => setDirectData({...directData, refId: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="#123"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Party Name</label>
+                                                                <input type="text" value={directData.partyName} onChange={e => setDirectData({...directData, partyName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Supplier/Customer Name"/>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-gray-400 uppercase">Driver / Notes</label>
+                                                            <input type="text" value={directData.driverName} onChange={e => setDirectData({...directData, driverName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Optional"/>
+                                                        </div>
+
+                                                        {/* Items List */}
+                                                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                            <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase">Items List</label>
+                                                            {directData.items.length === 0 && <div className="text-center text-xs text-gray-400 italic mb-2">No items added yet</div>}
+                                                            
+                                                            {/* UPDATED: Detailed Table View in Modal */}
+                                                            <div className="space-y-2 mb-3">
+                                                                {directData.items.map((item, idx) => (
+                                                                    <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border shadow-sm text-xs">
+                                                                        <div className="flex flex-col">
+                                                                            <span className="font-bold text-gray-700">{item.name}</span>
+                                                                            <span className="text-[10px] text-gray-400">{(item.boxes * 35) + item.looseKg} kg total</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex flex-col items-end mr-2">
+                                                                                <span className="font-mono font-bold bg-gray-100 px-1.5 py-0.5 rounded">{item.boxes} Bx</span>
+                                                                                {item.looseKg > 0 && <span className="text-[9px] text-orange-600">+{item.looseKg} kg</span>}
+                                                                            </div>
+                                                                            <button onClick={() => removeDirectItem(idx)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            
+                                                            {/* Input Row */}
+                                                            <div className="flex flex-col gap-2 bg-white p-2 rounded border border-blue-100">
+                                                                <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="Item Name (e.g. Rohu)"/>
+                                                                <div className="flex gap-2">
+                                                                    <div className="flex-1">
+                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">No. Boxes</label>
+                                                                        <input type="number" value={newItemBoxes} onChange={e => setNewItemBoxes(e.target.value)} className="w-full border p-2 rounded text-xs font-bold" placeholder="0"/>
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">Loose Kg</label>
+                                                                        <input type="number" value={newItemLooseKg} onChange={e => setNewItemLooseKg(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="0"/>
+                                                                    </div>
+                                                                    <div className="flex items-end">
+                                                                        <button onClick={addItemToDirect} className="h-[34px] bg-green-500 text-white px-4 rounded hover:bg-green-600 font-bold flex items-center justify-center"><Plus size={18}/></button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-[10px] text-right text-gray-400 italic">Total: {((parseInt(newItemBoxes)||0)*35 + (parseFloat(newItemLooseKg)||0))} Kg</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* NEW: ASSOCIATED EXPENSES SECTION */}
+                                                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
+                                                            <label className="block text-[10px] font-bold text-orange-800 mb-2 uppercase flex items-center gap-1"><Wallet size={10}/> Associated Expenses</label>
+                                                            
+                                                            {tempExpenses.length > 0 && (
+                                                                <div className="space-y-1 mb-3">
+                                                                    {tempExpenses.map(exp => (
+                                                                        <div key={exp.id} className="flex justify-between items-center bg-white px-2 py-1 rounded border text-xs">
+                                                                            <span className="text-gray-600">{exp.category}</span>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-bold">₹{exp.amount}</span>
+                                                                                <button onClick={() => removeTempExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex gap-2">
+                                                                <select value={tempExpenseCategory} onChange={e => setTempExpenseCategory(e.target.value)} className="border p-1 rounded text-xs bg-white flex-1">
+                                                                    {['Transport', 'Labour', 'Ice', 'Driver Beta', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}
+                                                                </select>
+                                                                <input type="number" value={tempExpenseAmount} onChange={e => setTempExpenseAmount(e.target.value)} className="w-20 border p-1 rounded text-xs" placeholder="Amount"/>
+                                                                <button onClick={addTempExpense} className="bg-orange-500 text-white px-2 rounded hover:bg-orange-600"><Plus size={16}/></button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-4 grid grid-cols-2 gap-3">
+                                                        <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel</button>
+                                                        <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record" : "Save Record"}</button>
+                                                    </div>
+                                                    <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel</button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'settings' && (
+                            <div className="bg-white p-4 rounded shadow h-full overflow-y-auto">
+                                <h3 className="font-bold mb-4 flex items-center gap-2 text-lg text-blue-900"><Truck size={20}/> Vehicle Setup</h3>
+                                <div className="space-y-6">
+                                    <div className="flex justify-end">
+                                        <button onClick={resetLayoutConfig} className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded hover:bg-red-100 flex items-center gap-1 border border-red-200">
+                                            <RefreshCw size={14} /> Reset Defaults
+                                        </button>
+                                    </div>
+
+                                    {/* --- CLEAR HISTORY BUTTON --- */}
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded space-y-2">
+                                        <h4 className="text-xs font-bold text-red-800 uppercase flex items-center gap-1"><AlertTriangle size={14}/> Data Management</h4>
+                                        <p className="text-[10px] text-red-600">This will permanently delete ALL history (Sales & Purchases) from this device. Use with caution.</p>
+                                        <button 
+                                            onClick={clearAllLocalData} 
+                                            className="w-full bg-red-600 text-white py-2 rounded text-xs font-bold hover:bg-red-700"
+                                        >
+                                            Clear All Local History
+                                        </button>
+                                    </div>
+
+                                    <div className="p-3 bg-gray-50 border rounded space-y-3">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase">Trip Details</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={() => setOperationMode('Sales')} className={`py-2 text-xs font-bold rounded border ${operationMode === 'Sales' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white text-gray-500'}`}>Sales / Dispatch</button>
+                                            <button onClick={() => setOperationMode('Purchase')} className={`py-2 text-xs font-bold rounded border ${operationMode === 'Purchase' ? 'bg-green-600 text-white border-green-700' : 'bg-white text-gray-500'}`}>Purchase / Inward</button>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 flex items-center gap-1"><Calendar size={10}/> Trip Date</label>
+                                            <input type="date" value={tripDate} onChange={e => setTripDate(e.target.value)} className="w-full border p-2 rounded text-sm font-bold text-gray-700 bg-white" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div><label className="block text-[10px] font-bold text-gray-400">Ref / Order ID</label><input type="text" value={referenceId} onChange={e => setReferenceId(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="#123" /></div>
+                                            <div><label className="block text-[10px] font-bold text-gray-400">Target Count / లక్ష్యం</label><input type="number" value={targetBoxCount} onChange={e => setTargetBoxCount(e.target.value)} className="w-full border p-1 rounded text-sm" placeholder="e.g. 150" /></div>
+                                        </div>
+                                    </div>
+                                    <div><label className="block text-xs font-bold text-gray-500 mb-1">Driver Name / డ్రైవర్ పేరు</label><input type="text" value={driverName} onChange={e => setDriverName(e.target.value)} className="w-full border p-2 rounded bg-gray-50"/></div>
+                                    <div><label className="block text-xs font-bold text-gray-500 mb-1">Customer / Supplier Name</label><input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full border p-2 rounded bg-gray-50"/></div>
+                                    <div><label className="block text-xs font-bold text-purple-800 mb-1">VAR Box Count / VAR బాక్సులు</label><input type="number" value={varBoxCount} onChange={e => setVarBoxCount(e.target.value)} className="w-full border border-purple-200 p-2 rounded bg-purple-50 focus:ring-2 focus:ring-purple-300 outline-none font-bold text-purple-900" placeholder="0"/></div>
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="block text-xs font-bold text-blue-900 flex items-center gap-1"><Layout size={12}/> Lane Configuration (Columns)</label>
+                                            <button onClick={addLane} className="flex items-center gap-1 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"><Plus size={14}/> Add Lane</button>
+                                        </div>
+                                        <div className="space-y-2 mb-4">
+                                            {lanes.map((lane, idx) => (
+                                                <div key={lane.id} className="flex items-center gap-2 bg-blue-50 p-2 rounded border border-blue-100 animate-fade-in">
+                                                    <div className="w-8 h-8 flex items-center justify-center bg-blue-200 rounded text-xs font-bold text-blue-800">L{idx+1}</div>
+                                                    <div className="flex-1"><label className="block text-[10px] text-gray-400 uppercase font-bold">Stacks</label><input type="number" value={lane.stacks} onChange={(e) => updateLaneConfig(lane.id, 'stacks', e.target.value)} className="w-full border p-1 rounded text-sm text-center" min="1" max="10" /></div>
+                                                    <div className="flex-1"><label className="block text-[10px] text-gray-400 uppercase font-bold">Height</label><input type="number" value={lane.height} onChange={(e) => updateLaneConfig(lane.id, 'height', e.target.value)} className="w-full border p-1 rounded text-sm text-center" min="1" max="10" /></div>
+                                                    <button onClick={() => removeLane(lane.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><X size={16} /></button>
+                                                </div>
+                                            ))}
+                                            {lanes.length === 0 && <div className="text-xs text-gray-400 text-center italic p-2">No lanes configured</div>}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="block text-xs font-bold text-orange-900 flex items-center gap-1"><Grid size={12}/> Row Configuration (Irregular)</label>
+                                            <button onClick={addRow} className="flex items-center gap-1 text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"><Plus size={14}/> Add Row</button>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {rows.map((row, idx) => (
+                                                <div key={row.id} className="flex items-center gap-2 bg-orange-50 p-2 rounded border border-orange-100 animate-fade-in">
+                                                    <div className="w-8 h-8 flex items-center justify-center bg-orange-200 rounded text-xs font-bold text-orange-800">R{idx+1}</div>
+                                                    <div className="flex-1"><label className="block text-[10px] text-gray-400 uppercase font-bold">Cols</label><input type="number" value={row.cols} onChange={(e) => updateRowConfig(idx, 'cols', e.target.value)} className="w-full border p-1 rounded text-sm text-center" min="1" max="5" /></div>
+                                                    <div className="flex-1"><label className="block text-[10px] text-gray-400 uppercase font-bold">Height</label><input type="number" value={row.height} onChange={(e) => updateRowConfig(idx, 'height', e.target.value)} className="w-full border p-1 rounded text-sm text-center" min="1" max="10" /></div>
+                                                    <button onClick={() => removeRow(idx)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><X size={16} /></button>
+                                                </div>
+                                            ))}
+                                            {rows.length === 0 && <div className="text-xs text-gray-400 text-center italic p-2">No rows configured</div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-white border-t p-2 flex justify-around items-center text-xs font-bold text-gray-500 safe-area-pb">
+                        <button onClick={() => setActiveTab('visualizer')} className={`flex flex-col items-center p-2 rounded ${activeTab === 'visualizer' ? 'text-blue-600 bg-blue-50' : ''}`}><Layers size={20} /><span className="mt-1">Layout</span></button>
+                        <button onClick={() => setActiveTab('share')} className={`flex flex-col items-center p-2 rounded ${activeTab === 'share' ? 'text-blue-600 bg-blue-50' : ''}`}><Camera size={20} /><span className="mt-1">Photo</span></button>
+                        <button onClick={() => setActiveTab('manifest')} className={`flex flex-col items-center p-2 rounded ${activeTab === 'manifest' ? 'text-blue-600 bg-blue-50' : ''}`}><FileText size={20} /><span className="mt-1">Manifest</span></button>
+                        <button onClick={() => setActiveTab('records')} className={`flex flex-col items-center p-2 rounded ${activeTab === 'records' ? 'text-blue-600 bg-blue-50' : ''}`}><BarChart3 size={20} /><span className="mt-1">Records</span></button>
+                        <button onClick={() => setActiveTab('daily')} className={`flex flex-col items-center p-2 rounded ${activeTab === 'daily' ? 'text-blue-600 bg-blue-50' : ''}`}><ClipboardList size={20} /><span className="mt-1">Daily</span></button>
+                        <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center p-2 rounded ${activeTab === 'settings' ? 'text-blue-600 bg-blue-50' : ''}`}><Box size={20} /><span className="mt-1">Config</span></button>
+                    </div>
                 </div>
-              ))}
-          </div>
-        </div>
+            );
+        };
 
-        <div className="text-center text-xs text-gray-500 mt-4">Supabase Project: wlntnttsliaygrqhfazj (anon key used in frontend)</div>
-      </div>
-    );
-  }
-
-  const root = createRoot(document.getElementById("root"));
-  root.render(<App />);
-  </script>
+        const root = createRoot(document.getElementById('root'));
+        root.render(<TruckLoadPlanner />);
+    </script>
 </body>
 </html>
