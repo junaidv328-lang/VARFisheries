@@ -144,37 +144,28 @@ const supabase = createClient(supabaseUrl, supabaseKey)
             const [newItemLooseKg, setNewItemLooseKg] = useState(''); 
 
             // --- INITIALIZATION & DATA LOADING ---
-            useEffect(() => {
-                if (!window.html2canvas) {
-                    const script = document.createElement('script');
-                    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-                    script.async = true;
-                    document.body.appendChild(script);
-                }
+           useEffect(() => {
+    loadTrips();
+    loadExpenses();
+}, []);
 
-                const loadedData = localStorage.getItem('var_truck_trips');
-                if (loadedData) {
-                    try {
-                        const parsed = JSON.parse(loadedData);
-                        parsed.sort((a, b) => b.timestamp - a.timestamp);
-                        setSavedTrips(parsed);
-                    } catch (e) {
-                        console.error("Failed to load trips", e);
-                    }
-                }
+async function loadTrips() {
+    const { data, error } = await supabase
+        .from("trips")
+        .select("*")
+        .order("timestamp", { ascending: false });
 
-                // Load Expenses
-                const loadedExpenses = localStorage.getItem('var_truck_expenses');
-                if (loadedExpenses) {
-                    try {
-                        const parsed = JSON.parse(loadedExpenses);
-                        parsed.sort((a, b) => b.timestamp - a.timestamp);
-                        setExpenses(parsed);
-                    } catch (e) {
-                        console.error("Failed to load expenses", e);
-                    }
-                }
-            }, []);
+    if (!error) setSavedTrips(data);
+}
+
+async function loadExpenses() {
+    const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .order("timestamp", { ascending: false });
+
+    if (!error) setExpenses(data);
+}
 
             // --- LOGIC HELPERS ---
             const getKey = (type, major, minor, h) => {
@@ -1891,4 +1882,5 @@ const supabase = createClient(supabaseUrl, supabaseKey)
     </script>
 </body>
 </html>
+
 
