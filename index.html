@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nellore Truck Loader (Cloud)</title>
+    <title>Nellore Truck Loader</title>
 
     <!-- Tailwind CSS for Styling -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,17 +14,13 @@
     <!-- PDF Generation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-    <!-- Import Map with Firebase SDKs -->
+    <!-- Import Map to tell the browser where to find React and Icons -->
     <script type="importmap">
     {
         "imports": {
             "react": "https://esm.sh/react@18.2.0",
             "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-            "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
-            "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
-            "firebase/analytics": "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js",
-            "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1"
         }
     }
     </script>
@@ -37,19 +33,27 @@
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
-        /* Scrollbar styling */
+        /* Scrollbar styling for a cleaner look */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #bbb; }
 
+        /* Force scrollbar to be visible in the table container on Mobile */
         .custom-scroll::-webkit-scrollbar {
             -webkit-appearance: none;
-            width: 8px; 
+            width: 8px; /* Slightly wider for visibility */
             display: block;
         }
-        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { border-radius: 4px; background-color: #9ca3af; border: 2px solid #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            border-radius: 4px;
+            background-color: #9ca3af; /* Gray-400 */
+            border: 2px solid #f1f1f1; /* Padding effect */
+        }
 
         .safe-area-pb { padding-bottom: env(safe-area-inset-bottom); }
     </style>
@@ -61,30 +65,7 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf, Cloud } from 'lucide-react';
-        
-        // --- FIREBASE IMPORTS ---
-        import { initializeApp } from "firebase/app";
-        import { getAnalytics } from "firebase/analytics";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, setDoc, query, orderBy, writeBatch, getDocs, where } from "firebase/firestore";
-        import { getAuth, signInAnonymously } from "firebase/auth";
-
-        // --- FIREBASE CONFIGURATION ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyBbEfjtUfn_nBmvdHY8INwtF4-YUJLNnYY",
-            authDomain: "var-fisheries.firebaseapp.com",
-            projectId: "var-fisheries",
-            storageBucket: "var-fisheries.firebasestorage.app",
-            messagingSenderId: "376492409540",
-            appId: "1:376492409540:web:274476f9fcf0c646ee3f91",
-            measurementId: "G-FJ1C5PMNRR"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
+        import { Truck, Box, Layers, FileText, ArrowRight, RotateCw, RotateCcw, Trash2, Save, Camera, Share2, Plus, X, RefreshCw, Package, User, Users, GripHorizontal, GripVertical, Layout, Grid, BoxSelect, ArrowDownCircle, ArrowUpCircle, Target, AlertCircle, Calendar, Database, Download, History, Info, ChevronDown, ChevronUp, BarChart3, Search, MinusCircle, PlusCircle, CloudOff, FilePlus, FileSpreadsheet, HardDrive, AlertTriangle, ChevronRight, Box as BoxIcon, Pencil, Scale, Image as ImageIcon, ClipboardList, Wallet, IndianRupee, FileText as FilePdf } from 'lucide-react';
 
         const TruckLoadPlanner = () => {
             // --- CONFIGURATION ---
@@ -93,7 +74,7 @@
             const [varBoxCount, setVarBoxCount] = useState(''); 
 
             // Operation Mode, Targets & Date
-            const [operationMode, setOperationMode] = useState('Sales'); 
+            const [operationMode, setOperationMode] = useState('Sales'); // 'Sales' or 'Purchase'
             const [referenceId, setReferenceId] = useState(''); 
             const [targetBoxCount, setTargetBoxCount] = useState(''); 
             const [tripDate, setTripDate] = useState(new Date().toISOString().split('T')[0]); 
@@ -116,29 +97,32 @@
             const [showItemStock, setShowItemStock] = useState(true); 
             const captureRef = useRef(null);
 
-            // RECORDS / HISTORY STATE (Managed by Firebase)
+            // RECORDS / HISTORY STATE
             const [savedTrips, setSavedTrips] = useState([]);
             const [expandedTripId, setExpandedTripId] = useState(null);
-            const [visibleRecords, setVisibleRecords] = useState(20); 
-            const [selectedItemHistory, setSelectedItemHistory] = useState(null); 
-            const [editingTripId, setEditingTripId] = useState(null); 
+            const [visibleRecords, setVisibleRecords] = useState(20); // PAGINATION STATE
+            const [selectedItemHistory, setSelectedItemHistory] = useState(null); // ITEM HISTORY VIEW STATE
+            const [editingTripId, setEditingTripId] = useState(null); // TRACK EDITING ID
 
-            // EXPENSES STATE (Managed by Firebase)
+            // EXPENSES STATE
             const [expenses, setExpenses] = useState([]);
             const [expenseCategory, setExpenseCategory] = useState('Labour');
             const [expenseAmount, setExpenseAmount] = useState('');
             const [expenseNote, setExpenseNote] = useState('');
             
+            // TEMP EXPENSES FOR MODAL
             const [tempExpenses, setTempExpenses] = useState([]);
             const [tempExpenseCategory, setTempExpenseCategory] = useState('Transport');
             const [tempExpenseAmount, setTempExpenseAmount] = useState('');
 
-            const [showReportModal, setShowReportModal] = useState(false);
-            const [showStockSnapshotModal, setShowStockSnapshotModal] = useState(false);
+            // REPORT GENERATION STATE
+            const [showReportModal, setShowReportModal] = useState(false); // For Daily Report
+            const [showStockSnapshotModal, setShowStockSnapshotModal] = useState(false); // For Full Stock List
             const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
             const reportCaptureRef = useRef(null);
             const stockCaptureRef = useRef(null);
 
+            // DIRECT ENTRY STATE
             const [showDirectEntry, setShowDirectEntry] = useState(false);
             const [directData, setDirectData] = useState({
                 date: new Date().toISOString().split('T')[0],
@@ -152,9 +136,8 @@
             const [newItemName, setNewItemName] = useState('');
             const [newItemBoxes, setNewItemBoxes] = useState(''); 
             const [newItemLooseKg, setNewItemLooseKg] = useState(''); 
-            const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-            // --- INITIALIZATION & FIREBASE LISTENERS ---
+            // --- INITIALIZATION & DATA LOADING ---
             useEffect(() => {
                 if (!window.html2canvas) {
                     const script = document.createElement('script');
@@ -163,31 +146,27 @@
                     document.body.appendChild(script);
                 }
 
-                // Handle Auth
-                signInAnonymously(auth).catch((error) => {
-                    console.error("Auth Error", error);
-                });
+                const loadedData = localStorage.getItem('var_truck_trips');
+                if (loadedData) {
+                    try {
+                        const parsed = JSON.parse(loadedData);
+                        parsed.sort((a, b) => b.timestamp - a.timestamp);
+                        setSavedTrips(parsed);
+                    } catch (e) {
+                        console.error("Failed to load trips", e);
+                    }
+                }
 
-                // Listen to TRIPS
-                const tripsQuery = query(collection(db, "var_truck_trips"), orderBy("timestamp", "desc"));
-                const unsubscribeTrips = onSnapshot(tripsQuery, (snapshot) => {
-                    const tripsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                    setSavedTrips(tripsData);
-                }, (error) => console.error("Trips Sync Error:", error));
-
-                // Listen to EXPENSES
-                const expensesQuery = query(collection(db, "var_truck_expenses"), orderBy("timestamp", "desc"));
-                const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
-                    const expData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                    setExpenses(expData);
-                }, (error) => console.error("Expenses Sync Error:", error));
-
-                window.addEventListener('online', () => setIsOffline(false));
-                window.addEventListener('offline', () => setIsOffline(true));
-
-                return () => {
-                    unsubscribeTrips();
-                    unsubscribeExpenses();
+                // Load Expenses
+                const loadedExpenses = localStorage.getItem('var_truck_expenses');
+                if (loadedExpenses) {
+                    try {
+                        const parsed = JSON.parse(loadedExpenses);
+                        parsed.sort((a, b) => b.timestamp - a.timestamp);
+                        setExpenses(parsed);
+                    } catch (e) {
+                        console.error("Failed to load expenses", e);
+                    }
                 }
             }, []);
 
@@ -463,17 +442,13 @@
                 return manifest;
             };
 
-            // --- FIREBASE ACTIONS (TRUCK LOAD) ---
-            const saveTrip = async () => {
+            // --- DATA ACTIONS (LOCAL STORAGE) ---
+            const saveTrip = () => {
                 const { totalBoxes, summary } = getManifestData();
                 if (totalBoxes === 0) return alert("Cannot save empty trip");
 
-                // Convert summary to detailedItems format for consistency
-                const detailedItems = Object.entries(summary).map(([name, count]) => ({
-                    name, boxes: count, looseKg: 0, totalWeight: count * 35
-                }));
-
-                const newTripData = {
+                const newTrip = {
+                    id: Date.now(),
                     timestamp: Date.now(),
                     tripDate,
                     operationMode,
@@ -484,77 +459,71 @@
                     varBoxCount,
                     totalBoxes,
                     summary,
-                    detailedItems, 
                     isDirectEntry: false 
                 };
 
-                try {
-                    await addDoc(collection(db, "var_truck_trips"), newTripData);
-                    alert("Trip Saved to Cloud!");
-                    if(window.confirm("Start new load?")) resetGrid();
-                } catch (e) {
-                    alert("Error saving: " + e.message);
+                const updatedTrips = [newTrip, ...savedTrips];
+                setSavedTrips(updatedTrips);
+                localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
+                
+                if(window.confirm("Trip Saved locally! Start a new load?")) {
+                    resetGrid();
                 }
             };
 
-             // Clear All Cloud Data Function (FIREBASE BATCH DELETE)
-             const clearAllLocalData = async () => {
-                if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
-                if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
+             // Clear All Local Data Function
+             const clearAllLocalData = () => {
+                if (!window.confirm("DANGER: This will delete ALL saved history (Sales & Purchases) from this device. This cannot be undone.")) return;
+
+                if (!window.confirm("Are you absolutely sure you want to delete all records?")) return;
                 
                 try {
-                    const batch = writeBatch(db);
-                    
-                    // Must check batch limit (500). If more, we'd need loops. For now assuming < 500 docs active.
-                    const tripsSnapshot = await getDocs(collection(db, "var_truck_trips"));
-                    tripsSnapshot.forEach(doc => batch.delete(doc.ref));
-
-                    const expSnapshot = await getDocs(collection(db, "var_truck_expenses"));
-                    expSnapshot.forEach(doc => batch.delete(doc.ref));
-
-                    await batch.commit();
-                    alert("Cloud Database Cleared.");
+                    localStorage.removeItem('var_truck_trips');
+                    localStorage.removeItem('var_truck_expenses'); 
+                    setSavedTrips([]);
+                    setExpenses([]);
+                    setExpandedTripId(null);
+                    setSelectedItemHistory(null);
+                    alert("All History Cleared Successfully.");
                     setActiveTab('records');
                 } catch (e) {
                     console.error("Clear failed", e);
-                    alert("Failed to clear cloud data. " + e.message);
+                    alert("Failed to clear data. Please try clearing browser cache.");
                 }
             };
 
-            // --- EXPENSE MANAGEMENT (FIREBASE) ---
-            const addExpense = async () => {
+            // --- EXPENSE MANAGEMENT (GLOBAL & TRIP LINKED) ---
+            const addExpense = () => {
                 if (!expenseAmount) return;
                 const newExpense = {
+                    id: Date.now(),
                     timestamp: Date.now(),
                     date: reportDate, 
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote
                 };
-                try {
-                    await addDoc(collection(db, "var_truck_expenses"), newExpense);
-                    setExpenseAmount('');
-                    setExpenseNote('');
-                } catch (e) {
-                    alert("Error adding expense: " + e.message);
-                }
+                const updatedExpenses = [newExpense, ...expenses];
+                setExpenses(updatedExpenses);
+                localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
+                setExpenseAmount('');
+                setExpenseNote('');
             };
 
-            const deleteExpense = async (id) => {
+            const deleteExpense = (id) => {
                 if(window.confirm("Delete this expense?")) {
-                    try {
-                        await deleteDoc(doc(db, "var_truck_expenses", id));
-                    } catch (e) {
-                        alert("Error deleting: " + e.message);
-                    }
+                    const updated = expenses.filter(e => e.id !== id);
+                    setExpenses(updated);
+                    localStorage.setItem('var_truck_expenses', JSON.stringify(updated));
                 }
             }
 
             // --- DIRECT ENTRY & EDITING ACTIONS ---
+            // Trip Expense Helpers
             const addTempExpense = () => {
                 if(!tempExpenseAmount) return;
                 setTempExpenses([...tempExpenses, {
-                    id: Date.now(), // Temporary local ID
+                    id: Date.now(),
                     category: tempExpenseCategory,
                     amount: parseFloat(tempExpenseAmount)
                 }]);
@@ -592,7 +561,7 @@
                 setDirectData({...directData, items: newItems});
             };
 
-            const openEditRecord = async (trip) => {
+            const openEditRecord = (trip) => {
                 const itemsList = trip.detailedItems || Object.entries(trip.summary || {}).map(([name, count]) => ({ 
                     name, 
                     count, 
@@ -601,8 +570,7 @@
                     totalWeight: count * 35 
                 }));
 
-                // Fetch existing expenses linked to this trip from Firestore
-                // Note: expenses state is already synced via onSnapshot
+                // Fetch existing expenses linked to this trip
                 const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
                 setTempExpenses(linkedExpenses);
 
@@ -618,7 +586,7 @@
                 setShowDirectEntry(true);
             };
 
-            const handleDirectSave = async (shouldDownload) => {
+            const handleDirectSave = (shouldDownload) => {
 
                 if (directData.items.length === 0) return alert("Add at least one item");
                 if (!directData.partyName) return alert("Enter Party Name");
@@ -633,8 +601,9 @@
                     summary[cleanName] = (summary[cleanName] || 0) + qty;
                 });
 
-                const tripData = {
-                    // Keep original timestamp if editing to maintain sort order
+                const recordId = editingTripId || Date.now();
+                const newRecord = {
+                    id: recordId,
                     timestamp: editingTripId ? savedTrips.find(t => t.id === editingTripId)?.timestamp : Date.now(),
                     tripDate: directData.date,
                     operationMode: directData.mode,
@@ -647,96 +616,68 @@
                     driverName: directData.driverName || 'Direct Entry'
                 };
 
-                try {
-                    let tripId;
-                    
-                    // 1. Save/Update Trip
-                    if (editingTripId) {
-                        tripId = editingTripId;
-                        await setDoc(doc(db, "var_truck_trips", tripId), tripData);
-                    } else {
-                        const docRef = await addDoc(collection(db, "var_truck_trips"), tripData);
-                        tripId = docRef.id;
-                    }
+                // Handle Expenses Logic
+                const otherExpenses = expenses.filter(e => e.tripId !== recordId);
+                const currentTripExpenses = tempExpenses.map(e => ({
+                    ...e,
+                    tripId: recordId,
+                    date: directData.date, 
+                    timestamp: e.timestamp || Date.now()
+                }));
+                const updatedExpensesList = [...otherExpenses, ...currentTripExpenses];
+                setExpenses(updatedExpensesList);
+                localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpensesList));
 
-                    // 2. Handle Linked Expenses
-                    // We delete all old expenses for this trip and re-create them to ensure sync
-                    // (A bit inefficient but safe for simplicity)
-                    const batch = writeBatch(db);
-                    
-                    // Find expenses currently in DB for this trip and delete them from batch
-                    const oldTripExpenses = expenses.filter(e => e.tripId === tripId);
-                    oldTripExpenses.forEach(e => {
-                        batch.delete(doc(db, "var_truck_expenses", e.id));
-                    });
 
-                    // Add all current tempExpenses to batch
-                    tempExpenses.forEach(exp => {
-                        const newExpRef = doc(collection(db, "var_truck_expenses"));
-                        batch.set(newExpRef, {
-                            timestamp: Date.now(),
-                            date: directData.date,
-                            category: exp.category,
-                            amount: exp.amount,
-                            tripId: tripId // Link to trip
-                        });
-                    });
-                    
-                    await batch.commit();
-                    
-                    alert(editingTripId ? "Record Updated!" : "Record Saved!");
-
-                    if (shouldDownload) {
-                        const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg"];
-                        const rows = directData.items.map(item => [
-                            directData.date,
-                            directData.mode,
-                            directData.partyName,
-                            directData.refId || '-',
-                            item.name,
-                            item.boxes,
-                            item.looseKg || 0,
-                            item.totalWeight || (item.boxes * 35)
-                        ].join(","));
-
-                        const csvContent = [headers.join(","), ...rows].join("\n");
-                        const blob = new Blob([csvContent], { type: 'text/csv' });
-                        const url = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Record_${directData.partyName}_${directData.date}.csv`;
-                        a.click();
-                    }
-
-                    setShowDirectEntry(false);
-                    setEditingTripId(null);
-                    setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
-                    setTempExpenses([]);
-
-                } catch (e) {
-                    console.error(e);
-                    alert("Error saving record: " + e.message);
+                let updatedTrips;
+                if (editingTripId) {
+                    updatedTrips = savedTrips.map(t => t.id === editingTripId ? newRecord : t);
+                    alert("Record Updated!");
+                } else {
+                    updatedTrips = [newRecord, ...savedTrips];
+                    if(!shouldDownload) alert("Record Saved!");
                 }
+
+                setSavedTrips(updatedTrips);
+                localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
+
+                if (shouldDownload) {
+                    const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg"];
+                    const rows = directData.items.map(item => [
+                        directData.date,
+                        directData.mode,
+                        directData.partyName,
+                        directData.refId || '-',
+                        item.name,
+                        item.boxes,
+                        item.looseKg || 0,
+                        item.totalWeight || (item.boxes * 35)
+                    ].join(","));
+
+                    const csvContent = [headers.join(","), ...rows].join("\n");
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Record_${directData.partyName}_${directData.date}.csv`;
+                    a.click();
+                }
+
+                setShowDirectEntry(false);
+                setEditingTripId(null);
+                setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
+                setTempExpenses([]); 
             };
 
-            const deleteTrip = async (id) => {
+            const deleteTrip = (id) => {
                 if(window.confirm("Delete this record? This will also delete associated expenses.")) {
-                    try {
-                        const batch = writeBatch(db);
-                        
-                        // Delete trip
-                        batch.delete(doc(db, "var_truck_trips", id));
-                        
-                        // Find associated expenses and delete them
-                        const linkedExpenses = expenses.filter(e => e.tripId === id);
-                        linkedExpenses.forEach(e => {
-                            batch.delete(doc(db, "var_truck_expenses", e.id));
-                        });
-                        
-                        await batch.commit();
-                    } catch (e) {
-                        alert("Error deleting: " + e.message);
-                    }
+                    const updatedTrips = savedTrips.filter(t => t.id !== id);
+                    setSavedTrips(updatedTrips);
+                    localStorage.setItem('var_truck_trips', JSON.stringify(updatedTrips));
+
+                    const updatedExpenses = expenses.filter(e => e.tripId !== id);
+                    setExpenses(updatedExpenses);
+                    localStorage.setItem('var_truck_expenses', JSON.stringify(updatedExpenses));
                 }
             };
 
@@ -756,7 +697,7 @@
                 a.href = url; a.download = `var_truck_records_${new Date().toISOString().split('T')[0]}.csv`; a.click();
             };
 
-            // REPORT CAPTURE HANDLER
+            // UPDATED REPORT CAPTURE HANDLER (FULL CLONE STRATEGY)
             const handleReportCapture = async () => {
                 if (!window.html2canvas || !window.jspdf) { 
                     alert("Loading PDF tools..."); return; 
@@ -766,16 +707,18 @@
                 if (!input) return;
 
                 try {
+                    // 1. Clone element to ensure fixed desktop width layout
                     const clone = input.cloneNode(true);
-                    clone.style.width = '1000px'; 
+                    clone.style.width = '1000px'; // Force desktop width for clarity
                     clone.style.position = 'fixed';
                     clone.style.top = '-10000px';
                     clone.style.left = '0';
                     clone.style.zIndex = '-1';
                     document.body.appendChild(clone);
 
+                    // 2. Capture high-res canvas
                     const canvas = await window.html2canvas(clone, { 
-                        scale: 3, 
+                        scale: 3, // High Res
                         logging: false, 
                         useCORS: true,
                         windowWidth: 1000
@@ -784,11 +727,12 @@
                     document.body.removeChild(clone);
 
                     const imgData = canvas.toDataURL('image/jpeg', 1.0);
-                    const imgWidth = 210; 
-                    const pageHeight = 297; 
+                    const imgWidth = 210; // A4 width mm
+                    const pageHeight = 297; // A4 height mm
                     const imgHeight = (canvas.height * imgWidth) / canvas.width;
                     
                     const { jsPDF } = window.jspdf;
+                    // Create PDF that fits the content height exactly
                     const pdf = new jsPDF('p', 'mm', [imgWidth, Math.max(imgHeight, pageHeight)]);
                     
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
@@ -839,14 +783,16 @@
                 let totalOutBoxes = 0;
                 let totalOutLoose = 0;
 
+                // Expenses for this day
                 const dailyExpenses = expenses.filter(e => e.date === targetDate);
                 const totalExpenseAmount = dailyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
                 savedTrips.filter(t => t.tripDate === targetDate).forEach(t => {
                     const party = t.customerName || 'Unknown';
                     const mode = t.operationMode;
-                    const tripExpenses = expenses.filter(e => e.tripId === t.id); 
+                    const tripExpenses = expenses.filter(e => e.tripId === t.id); // Get linked expenses
                     
+                    // Normalize items
                     let items = [];
                     if (t.detailedItems) {
                         items = t.detailedItems.map(i => ({
@@ -868,6 +814,7 @@
                         targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [] };
                     }
 
+                    // Add Items
                     items.forEach(i => {
                         const existingItem = targetObj[party].items.find(x => x.name === i.name);
                         if (existingItem) {
@@ -878,6 +825,7 @@
                         }
                     });
 
+                    // Add Expenses to this party's block
                     tripExpenses.forEach(exp => {
                         targetObj[party].expenses.push(exp);
                     });
@@ -903,7 +851,7 @@
                     totalInBoxes, totalInLoose, 
                     totalOutBoxes, totalOutLoose,
                     totalExpenseAmount,
-                    dailyExpenses 
+                    dailyExpenses // Return full list for the footer table
                 };
             };
 
@@ -1109,8 +1057,8 @@
                             <div><h1 className="font-bold text-lg leading-tight">VAR Load Planner</h1><div className="flex flex-col leading-none"><span className="text-xs text-white/80 font-bold uppercase tracking-widest">{operationMode}</span></div></div>
                         </div>
                         <div className="text-right text-xs">
-                            <div className="uppercase font-bold text-white/60">Cloud Mode</div>
-                            <div className={`flex items-center justify-end gap-1 ${isOffline ? 'text-red-300' : 'text-green-300'}`}><Cloud size={10}/> {isOffline ? 'Offline' : 'Connected'}</div>
+                            <div className="uppercase font-bold text-white/60">Hybrid Mode</div>
+                            <div className="flex items-center justify-end gap-1 text-gray-300"><HardDrive size={10}/> Local</div>
                         </div>
                     </div>
 
