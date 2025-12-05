@@ -506,6 +506,12 @@
             };
 
              const clearAllLocalData = async () => {
+                // SECURITY: PIN CHECK
+                const enteredPin = prompt("Enter PIN to clear database:");
+                if (enteredPin !== "9999") {
+                    return alert("Incorrect PIN. Access Denied.");
+                }
+
                 if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
                 if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
                 
