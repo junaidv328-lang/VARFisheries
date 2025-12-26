@@ -130,6 +130,7 @@
                 partyName: '',
                 refId: '', 
                 driverName: '', 
+                amount: '', // Added amount field
                 items: [] 
             });
             
@@ -421,6 +422,19 @@
                 return { purchased, sold, balance: purchased - sold, itemStats };
             }, [savedTrips]);
 
+            // MEMOIZED UNIQUE ITEMS FOR DATALIST
+            const uniqueItemNames = useMemo(() => {
+                const names = new Set();
+                savedTrips.forEach(t => {
+                    if (t.detailedItems) {
+                        t.detailedItems.forEach(i => i.name && names.add(i.name));
+                    } else if (t.summary) {
+                        Object.keys(t.summary).forEach(k => names.add(k));
+                    }
+                });
+                return Array.from(names).sort();
+            }, [savedTrips]);
+
             // Helper to render Qty Cell
             const renderQtyCell = (boxes, loose, colorClass) => {
                 if (!boxes && !loose) return <span className="text-gray-300">-</span>;
@@ -619,6 +633,7 @@
                     partyName: trip.customerName,
                     refId: trip.referenceId,
                     driverName: trip.driverName || '',
+                    amount: trip.transactionAmount || '', // Load existing amount if editing
                     items: itemsList
                 });
                 setEditingTripId(trip.id);
@@ -652,7 +667,8 @@
                     summary,
                     detailedItems: directData.items,
                     isDirectEntry: true, 
-                    driverName: directData.driverName || 'Direct Entry'
+                    driverName: directData.driverName || 'Direct Entry',
+                    transactionAmount: directData.amount ? parseFloat(directData.amount) : 0 // Save the amount
                 };
 
                 try {
@@ -682,7 +698,7 @@
                     alert(editingTripId ? "Record Updated!" : "Record Saved!");
 
                     if (shouldDownload) {
-                        const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg"];
+                        const headers = ["Date", "Mode", "Party", "Ref ID", "Item", "Boxes", "Loose Kg", "Total Kg", "Amount"];
                         const rows = directData.items.map(item => [
                             directData.date,
                             directData.mode,
@@ -691,7 +707,8 @@
                             item.name,
                             item.boxes,
                             item.looseKg || 0,
-                            item.totalWeight || (item.boxes * 35)
+                            item.totalWeight || (item.boxes * 35),
+                            directData.amount || 0
                         ].join(","));
 
                         const csvContent = [headers.join(","), ...rows].join("\n");
@@ -705,7 +722,7 @@
 
                     setShowDirectEntry(false);
                     setEditingTripId(null);
-                    setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', items: [] });
+                    setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', amount: '', items: [] });
                     setTempExpenses([]);
 
                 } catch (e) {
@@ -856,7 +873,12 @@
                     const targetObj = mode === 'Purchase' ? purchases : sales;
                     
                     if (!targetObj[party]) {
-                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [], notes: [] };
+                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [], notes: [], totalAmount: 0 };
+                    }
+
+                    // Accumulate Transaction Amount
+                    if (t.transactionAmount) {
+                        targetObj[party].totalAmount += parseFloat(t.transactionAmount);
                     }
 
                     // Collect Driver/Notes (avoid duplicates)
@@ -1100,6 +1122,11 @@
             // --- UI ---
             return (
                 <div className="flex flex-col h-full w-full bg-gray-100 max-w-md mx-auto shadow-2xl overflow-hidden font-sans">
+                    {/* DataList for Item Suggestions */}
+                    <datalist id="item-suggestions">
+                        {uniqueItemNames.map(name => <option key={name} value={name} />)}
+                    </datalist>
+
                     {/* Header */}
                     <div className={`text-white p-4 flex justify-between items-center shadow-lg z-10 ${operationMode === 'Sales' ? 'bg-blue-900' : 'bg-green-800'}`}>
                         <div className="flex items-center gap-2">
@@ -1116,7 +1143,7 @@
                         <div className="bg-white p-3 shadow-sm z-10">
                             <label className="text-xs font-bold text-gray-500 uppercase">Item Name / ఐటమ్ పేరు</label>
                             <div className="flex gap-2 mt-1">
-                                <input type="text" placeholder="e.g. Farmer Ramu - 500g" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={batchInput} onChange={(e) => setBatchInput(e.target.value)} />
+                                <input list="item-suggestions" type="text" placeholder="e.g. Farmer Ramu - 500g" className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={batchInput} onChange={(e) => setBatchInput(e.target.value)} />
                                 <button onClick={manualResetGrid} className="bg-red-50 text-red-600 p-2 rounded border border-red-100 hover:bg-red-100 transition-colors flex items-center gap-1"><RotateCcw size={18} /></button>
                             </div>
                             {/* NEW: Stock Check Button in Visualizer */}
@@ -1590,14 +1617,11 @@
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
-                                                                                        {/* NOTES DISPLAY */}
-                                                                                        {p.notes && p.notes.filter(n => n !== 'Direct Entry').length > 0 && (
-                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
-                                                                                                {p.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
-                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
-                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
-                                                                                                     </div>
-                                                                                                ))}
+                                                                                        {/* AMOUNT DISPLAY (Replaces Notes) */}
+                                                                                        {p.totalAmount > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
+                                                                                                <span className="font-bold text-gray-500">Amount Given:</span>
+                                                                                                <span className="font-bold text-green-700">₹{p.totalAmount}</span>
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
@@ -1633,14 +1657,11 @@
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
-                                                                                        {/* NOTES DISPLAY */}
-                                                                                        {s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
-                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
-                                                                                                {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
-                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
-                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
-                                                                                                     </div>
-                                                                                                ))}
+                                                                                        {/* AMOUNT DISPLAY (Replaces Notes) */}
+                                                                                        {s.totalAmount > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
+                                                                                                <span className="font-bold text-gray-500">Amount Received:</span>
+                                                                                                <span className="font-bold text-blue-700">₹{s.totalAmount}</span>
                                                                                             </div>
                                                                                         )}
                                                                                     </div>
@@ -1679,14 +1700,11 @@
                                                                                                     </div>
                                                                                                 ))}
                                                                                             </div>
-                                                                                            {/* NOTES DISPLAY */}
-                                                                                            {s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
-                                                                                                <div className="mt-1.5 pt-1 border-t border-gray-100">
-                                                                                                    {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
-                                                                                                        <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
-                                                                                                            <span className="opacity-70">📝</span> <span>{note}</span>
-                                                                                                        </div>
-                                                                                                    ))}
+                                                                                            {/* AMOUNT DISPLAY (Replaces Notes) */}
+                                                                                            {s.totalAmount > 0 && (
+                                                                                                <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
+                                                                                                    <span className="font-bold text-gray-500">Amount Received:</span>
+                                                                                                    <span className="font-bold text-blue-700">₹{s.totalAmount}</span>
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
@@ -1804,43 +1822,42 @@
                                             <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
                                                 <div className="bg-white w-full max-w-md p-4 rounded-xl animate-slide-up flex flex-col max-h-[90vh] shadow-2xl">
                                                     <div className="flex justify-between items-center mb-4 pb-2 border-b">
-                                                        <h3 className="font-bold text-gray-800 flex items-center gap-2"><FilePlus size={20}/> {editingTripId ? "Edit Record" : "Direct Entry"}</h3>
+                                                        <h3 className="font-bold text-gray-800 flex items-center gap-2"><FilePlus size={20}/> {editingTripId ? "Edit Record / రికార్డు సవరించండి" : "Direct Entry / నేరుగా నమోదు"}</h3>
                                                         <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="text-gray-500 p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
                                                     </div>
 
                                                     <div className="space-y-3 overflow-y-auto flex-1">
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Date</label>
-                                                                <input type="date" value={directData.date} onChange={e => setDirectData({...directData, date: e.target.value})} className="w-full border p-2 rounded text-sm font-bold"/>
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Mode</label>
-                                                                <select value={directData.mode} onChange={e => setDirectData({...directData, mode: e.target.value})} className="w-full border p-2 rounded text-sm font-bold bg-white">
-                                                                    <option value="Purchase">Purchase</option>
-                                                                    <option value="Sales">Sales</option>
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Ref / Bill No</label>
-                                                                <input type="text" value={directData.refId} onChange={e => setDirectData({...directData, refId: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="#123"/>
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Party Name</label>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Party Name / పార్టీ పేరు</label>
                                                                 <input type="text" value={directData.partyName} onChange={e => setDirectData({...directData, partyName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Supplier/Customer Name"/>
+                                                            </div>
+                                                            {/* NEW AMOUNT FIELD */}
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">
+                                                                    {directData.mode === 'Sales' ? 'Amount Received / స్వీకరించిన మొత్తం' : 'Amount Given / ఇచ్చిన మొత్తం'}
+                                                                </label>
+                                                                <div className="relative">
+                                                                    <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400">₹</div>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        value={directData.amount} 
+                                                                        onChange={e => setDirectData({...directData, amount: e.target.value})} 
+                                                                        className="w-full border p-2 pl-5 rounded text-sm font-bold" 
+                                                                        placeholder="0.00"
+                                                                    />
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-[10px] font-bold text-gray-400 uppercase">Driver / Notes</label>
-                                                            <input type="text" value={directData.driverName} onChange={e => setDirectData({...directData, driverName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Optional"/>
+                                                            <label className="block text-[10px] font-bold text-gray-400 uppercase">Driver / Notes / డ్రైవర్ / గమనికలు</label>
+                                                            <input type="text" value={directData.driverName} onChange={e => setDirectData({...directData, driverName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Optional / ఐచ్ఛికం"/>
                                                         </div>
 
                                                         {/* Items List */}
                                                         <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                                            <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase">Items List</label>
-                                                            {directData.items.length === 0 && <div className="text-center text-xs text-gray-400 italic mb-2">No items added yet</div>}
+                                                            <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase">Items List / సరుకుల జాబితా</label>
+                                                            {directData.items.length === 0 && <div className="text-center text-xs text-gray-400 italic mb-2">No items added yet / ఇంకా ఏ సరుకులు జోడించలేదు</div>}
                                                             
                                                             {/* UPDATED: Detailed Table View in Modal */}
                                                             <div className="space-y-2 mb-3">
@@ -1863,14 +1880,14 @@
                                                             
                                                             {/* Input Row */}
                                                             <div className="flex flex-col gap-2 bg-white p-2 rounded border border-blue-100">
-                                                                <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="Item Name (e.g. Rohu)"/>
+                                                                <input list="item-suggestions" type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="Item Name / ఐటమ్ పేరు (e.g. Rohu)"/>
                                                                 <div className="flex gap-2">
                                                                     <div className="flex-1">
-                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">No. Boxes</label>
+                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">No. Boxes / పెట్టెల సంఖ్య</label>
                                                                         <input type="number" value={newItemBoxes} onChange={e => setNewItemBoxes(e.target.value)} className="w-full border p-2 rounded text-xs font-bold" placeholder="0"/>
                                                                     </div>
                                                                     <div className="flex-1">
-                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">Loose Kg</label>
+                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">Loose Kg / విడిగా (కేజీలు)</label>
                                                                         <input type="number" value={newItemLooseKg} onChange={e => setNewItemLooseKg(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="0"/>
                                                                     </div>
                                                                     <div className="flex items-end">
@@ -1883,7 +1900,7 @@
 
                                                         {/* NEW: ASSOCIATED EXPENSES SECTION */}
                                                         <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
-                                                            <label className="block text-[10px] font-bold text-orange-800 mb-2 uppercase flex items-center gap-1"><Wallet size={10}/> Associated Expenses</label>
+                                                            <label className="block text-[10px] font-bold text-orange-800 mb-2 uppercase flex items-center gap-1"><Wallet size={10}/> Associated Expenses / అనుబంధ ఖర్చులు</label>
                                                             
                                                             {tempExpenses.length > 0 && (
                                                                 <div className="space-y-1 mb-3">
@@ -1909,10 +1926,10 @@
                                                         </div>
 
                                                         <div className="mt-4 grid grid-cols-2 gap-3">
-                                                            <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel</button>
-                                                            <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record" : "Save Record"}</button>
+                                                            <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel / రద్దు</button>
+                                                            <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record / అప్‌డేట్" : "Save Record / సేవ్ చేయండి"}</button>
                                                         </div>
-                                                        <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel</button>
+                                                        <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel / సేవ్ & ఎక్సెల్ డౌన్‌లోడ్</button>
                                                     </div>
                                                 </div>
                                             </div>
