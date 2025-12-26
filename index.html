@@ -506,12 +506,6 @@
             };
 
              const clearAllLocalData = async () => {
-                // SECURITY: PIN CHECK
-                const enteredPin = prompt("Enter PIN to clear database:");
-                if (enteredPin !== "9999") {
-                    return alert("Incorrect PIN. Access Denied.");
-                }
-
                 if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
                 if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
                 
@@ -862,7 +856,14 @@
                     const targetObj = mode === 'Purchase' ? purchases : sales;
                     
                     if (!targetObj[party]) {
-                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [] };
+                        targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [], notes: [] };
+                    }
+
+                    // Collect Driver/Notes (avoid duplicates)
+                    if (t.driverName) {
+                        if (!targetObj[party].notes.includes(t.driverName)) {
+                            targetObj[party].notes.push(t.driverName);
+                        }
                     }
 
                     items.forEach(i => {
@@ -973,8 +974,8 @@
                     if (!isEmpty) bgColor = 'bg-blue-100';
                     if (isFull) bgColor = 'bg-blue-500 text-white';
                     const isSelected = selectedCell && selectedCell.type === type && 
-                                             ((type === 'lane' && selectedCell.laneId === major && selectedCell.stackIdx === minor) ||
-                                              (type === 'row' && selectedCell.rowIdx === major && selectedCell.colIdx === minor));
+                                                 ((type === 'lane' && selectedCell.laneId === major && selectedCell.stackIdx === minor) ||
+                                                  (type === 'row' && selectedCell.rowIdx === major && selectedCell.colIdx === minor));
                     if (isSelected) bgColor = 'ring-4 ring-yellow-400 ' + bgColor;
                     const handleClick = () => {
                         if (type === 'lane') setSelectedCell({ type: 'lane', laneId: major, stackIdx: minor });
@@ -1430,8 +1431,8 @@
                                                                                     </td>
                                                                                     <td className="p-2 text-right bg-gray-50/20 align-top">
                                                                                         <div className={`flex flex-col items-end leading-tight ${isNeg ? 'text-red-600' : 'text-gray-800'}`}>
-                                                                                            <span className="font-bold">{balBoxes} Bx</span>
-                                                                                            {balLoose !== 0 && <span className={`text-[9px] ${isNeg ? 'text-red-400' : 'text-gray-400'}`}>{balLoose > 0 ? '+' : ''}{balLoose} Kg</span>}
+                                                                                                <span className="font-bold">{balBoxes} Bx</span>
+                                                                                                {balLoose !== 0 && <span className={`text-[9px] ${isNeg ? 'text-red-400' : 'text-gray-400'}`}>{balLoose > 0 ? '+' : ''}{balLoose} Kg</span>}
                                                                                         </div>
                                                                                     </td>
                                                                                     <td className="p-2 text-gray-300 group-hover:text-blue-400 align-middle"><ChevronRight size={14}/></td>
@@ -1580,6 +1581,16 @@
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
+                                                                                        {/* NOTES DISPLAY */}
+                                                                                        {p.notes && p.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                {p.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                     </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -1613,6 +1624,16 @@
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
+                                                                                        {/* NOTES DISPLAY */}
+                                                                                        {s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                     </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -1830,13 +1851,13 @@
                                                                 <button onClick={addTempExpense} className="bg-orange-500 text-white px-2 rounded hover:bg-orange-600"><Plus size={16}/></button>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    <div className="mt-4 grid grid-cols-2 gap-3">
-                                                        <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel</button>
-                                                        <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record" : "Save Record"}</button>
+                                                        <div className="mt-4 grid grid-cols-2 gap-3">
+                                                            <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel</button>
+                                                            <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record" : "Save Record"}</button>
+                                                        </div>
+                                                        <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel</button>
                                                     </div>
-                                                    <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel</button>
                                                 </div>
                                             </div>
                                         )}
