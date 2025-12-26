@@ -1827,12 +1827,35 @@
                                                     </div>
 
                                                     <div className="space-y-3 overflow-y-auto flex-1">
+                                                        {/* Restored Date and Mode Fields */}
                                                         <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Date / తేదీ</label>
+                                                                <input type="date" value={directData.date} onChange={e => setDirectData({...directData, date: e.target.value})} className="w-full border p-2 rounded text-sm font-bold"/>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Mode / విధానం</label>
+                                                                <select value={directData.mode} onChange={e => setDirectData({...directData, mode: e.target.value})} className="w-full border p-2 rounded text-sm font-bold bg-white">
+                                                                    <option value="Purchase">Purchase / కొనుగోలు</option>
+                                                                    <option value="Sales">Sales / అమ్మకాలు</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Ref and Party Name */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Ref / Bill No / బిల్లు నం.</label>
+                                                                <input type="text" value={directData.refId} onChange={e => setDirectData({...directData, refId: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="#123"/>
+                                                            </div>
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-gray-400 uppercase">Party Name / పార్టీ పేరు</label>
                                                                 <input type="text" value={directData.partyName} onChange={e => setDirectData({...directData, partyName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Supplier/Customer Name"/>
                                                             </div>
-                                                            {/* NEW AMOUNT FIELD */}
+                                                        </div>
+
+                                                        {/* Amount and Driver/Notes */}
+                                                        <div className="grid grid-cols-2 gap-2">
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-gray-400 uppercase">
                                                                     {directData.mode === 'Sales' ? 'Amount Received / స్వీకరించిన మొత్తం' : 'Amount Given / ఇచ్చిన మొత్తం'}
@@ -1848,10 +1871,10 @@
                                                                     />
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="block text-[10px] font-bold text-gray-400 uppercase">Driver / Notes / డ్రైవర్ / గమనికలు</label>
-                                                            <input type="text" value={directData.driverName} onChange={e => setDirectData({...directData, driverName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Optional / ఐచ్ఛికం"/>
+                                                            <div>
+                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Driver / Notes / డ్రైవర్ / గమనికలు</label>
+                                                                <input type="text" value={directData.driverName} onChange={e => setDirectData({...directData, driverName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Optional / ఐచ్ఛికం"/>
+                                                            </div>
                                                         </div>
 
                                                         {/* Items List */}
