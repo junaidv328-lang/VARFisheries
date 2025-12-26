@@ -1552,7 +1552,8 @@
                                                     
                                                     <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
                                                         {/* REPORT CONTAINER FOR CAPTURE */}
-                                                        <div ref={reportCaptureRef} className="bg-white p-6 w-full max-w-2xl shadow-lg text-sm text-gray-800">
+                                                        {/* UPDATED: Added min-w-[800px] to ensure 3-column layout has enough width without shrinking fonts */}
+                                                        <div ref={reportCaptureRef} className="bg-white p-6 w-full min-w-[800px] max-w-3xl shadow-lg text-sm text-gray-800">
                                                             <div className="text-center border-b-2 border-gray-300 pb-4 mb-4">
                                                                 <h1 className="text-2xl font-black uppercase text-gray-800">Daily Activity Report</h1>
                                                                 <div className="text-gray-500 font-bold mt-1">{reportDate}</div>
@@ -1560,11 +1561,19 @@
                                                             
                                                             {(() => {
                                                                 const stats = getDailyReportStats(reportDate);
+                                                                
+                                                                // Logic to split Sales if too long
+                                                                const salesThreshold = 8;
+                                                                const isSalesSplit = stats.sales.length > salesThreshold;
+                                                                
+                                                                const salesPart1 = isSalesSplit ? stats.sales.slice(0, Math.ceil(stats.sales.length / 2)) : stats.sales;
+                                                                const salesPart2 = isSalesSplit ? stats.sales.slice(Math.ceil(stats.sales.length / 2)) : [];
+
                                                                 return (
-                                                                    <div className="grid grid-cols-2 gap-4">
+                                                                    <div className={`grid gap-4 ${isSalesSplit ? 'grid-cols-3' : 'grid-cols-2'}`}>
                                                                         {/* LEFT: PURCHASE */}
                                                                         <div className="flex flex-col border-r border-gray-300 pr-4">
-                                                                            <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase (Inward)</h2>
+                                                                            <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase</h2>
                                                                             <div className="space-y-3 flex-1">
                                                                                 {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
                                                                                 {stats.purchases.map((p, idx) => (
@@ -1605,12 +1614,12 @@
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* RIGHT: SALES */}
-                                                                        <div className="flex flex-col pl-4">
-                                                                            <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (Outward)</h2>
+                                                                        {/* RIGHT: SALES PART 1 */}
+                                                                        <div className={`flex flex-col ${isSalesSplit ? 'border-r border-gray-300 pr-2 pl-2' : 'pl-4'}`}>
+                                                                            <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">{isSalesSplit ? 'Sales (1)' : 'Sales'}</h2>
                                                                             <div className="space-y-3 flex-1">
-                                                                                {stats.sales.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
-                                                                                {stats.sales.map((s, idx) => (
+                                                                                {salesPart1.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
+                                                                                {salesPart1.map((s, idx) => (
                                                                                     <div key={idx} className="border border-gray-200 rounded p-2">
                                                                                         <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
                                                                                             <span>{s.name}</span>
@@ -1637,16 +1646,63 @@
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
-                                                                            <div className="mt-4 pt-2 border-t-2 border-blue-200">
-                                                                                <div className="flex justify-between text-lg font-black text-blue-900">
-                                                                                    <span>Total Out:</span>
-                                                                                    <div className="text-right">
-                                                                                        <div>{stats.totalOutBoxes} Boxes</div>
-                                                                                        <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                            {/* If NOT split, show total here */}
+                                                                            {!isSalesSplit && (
+                                                                                <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                    <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                        <span>Total Out:</span>
+                                                                                        <div className="text-right">
+                                                                                            <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                            <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* RIGHT: SALES PART 2 (Only if split) */}
+                                                                        {isSalesSplit && (
+                                                                            <div className="flex flex-col pl-2">
+                                                                                <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (2)</h2>
+                                                                                <div className="space-y-3 flex-1">
+                                                                                    {salesPart2.map((s, idx) => (
+                                                                                        <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                            <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                                <span>{s.name}</span>
+                                                                                                <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                {s.items.map((it, i) => (
+                                                                                                    <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                        <span>{it.name}</span>
+                                                                                                        <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                            {/* NOTES DISPLAY */}
+                                                                                            {s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                                <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                    {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                        <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                            <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                                <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                    <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                        <span>Total Out:</span>
+                                                                                        <div className="text-right">
+                                                                                            <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                            <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
-                                                                        </div>
+                                                                        )}
                                                                     </div>
                                                                 );
                                                             })()}
