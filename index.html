@@ -99,7 +99,7 @@
             const [showAggregatedDetails, setShowAggregatedDetails] = useState(false);
             const [showItemStock, setShowItemStock] = useState(true); 
             const captureRef = useRef(null);
-            const directEntryCaptureRef = useRef(null); // Added Ref for Direct Entry Receipt
+            const directEntryCaptureRef = useRef(null); // Ref for Direct Entry Receipt
 
             // RECORDS / HISTORY STATE (Managed by Supabase)
             const [savedTrips, setSavedTrips] = useState([]);
@@ -408,7 +408,7 @@
                         });
                     } else if (t.summary) {
                         Object.keys(t.summary).forEach(item => {
-                            if (item.startsWith('__')) return; // skip internal fields
+                            if (item.startsWith('__')) return; // Skip internal fields
                             const cleanItem = item.trim();
                             ensureItem(cleanItem);
                             const qty = Number(t.summary[item]) || 0;
@@ -467,7 +467,7 @@
                     aggregatedTotal += t.totalBoxes;
                     if (t.summary) {
                         Object.keys(t.summary).forEach(item => {
-                            if(!item.startsWith('__')) {
+                            if (!item.startsWith('__')) {
                                 aggregatedItems[item] = (aggregatedItems[item] || 0) + t.summary[item];
                             }
                         });
@@ -634,6 +634,7 @@
                         totalWeight: count * 35 
                     }));
 
+                // Retrieve Amount from hidden field in summary
                 const savedAmount = trip.summary?.['__transaction_amount'] || trip.transactionAmount || '';
 
                 // Fetch existing expenses linked to this trip from Firestore
@@ -814,6 +815,7 @@
                     headers.join(","),
                     ...savedTrips.map(t => [
                         t.tripDate, t.operationMode, t.isDirectEntry ? 'Direct' : 'Truck', t.driverName, t.customerName, t.referenceId, t.totalBoxes,
+                        // Clean summary for CSV
                         JSON.stringify(t.summary, (key, value) => key.startsWith('__') ? undefined : value).replace(/,/g, ';') 
                     ].join(","))
                 ].join("\n");
@@ -881,15 +883,18 @@
                     const canvas = await window.html2canvas(stockCaptureRef.current, { 
                         backgroundColor: '#ffffff', scale: 2, logging: false, useCORS: true 
                     });
+                    
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve));
+                    const file = new File([blob], `Stock_Summary_${new Date().toISOString().split('T')[0]}.png`, { type: "image/png" });
+
                     if (navigator.share) {
-                        canvas.toBlob(async (blob) => {
-                            const file = new File([blob], `Stock_Summary_${new Date().toISOString().split('T')[0]}.png`, { type: "image/png" });
+                        try {
                             await navigator.share({ files: [file], title: `Stock Summary` });
-                        });
+                        } catch (e) { console.log("Share cancelled"); }
                     } else {
                         const link = document.createElement('a');
-                        link.href = canvas.toDataURL('image/png');
-                        link.download = `Stock_Summary.png`;
+                        link.href = URL.createObjectURL(file);
+                        link.download = file.name;
                         link.click();
                     }
                 } catch (error) { 
@@ -1555,9 +1560,11 @@
                                             )}
                                             {/* NEW SNAPSHOT BUTTON FOR ITEM REPORT */}
                                             {activeTab === 'records' && (
-                                                <button onClick={() => setShowStockSnapshotModal(true)} className="w-full mt-2 bg-blue-50 text-blue-600 border border-blue-200 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 hover:bg-blue-100">
-                                                    <Camera size={14}/> 📸 Snap Full Stock List
-                                                </button>
+                                                <div className="mt-4">
+                                                    <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
+                                                        <Share2 size={20}/> Share Image / షేర్
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
 
@@ -1905,7 +1912,9 @@
                                                         </div>
                                                     </div>
                                                     <div className="mt-4">
-                                                        <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700"><Camera size={20}/> Share Image</button>
+                                                        <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
+                                                            <Share2 size={20}/> Share Image / షేర్
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
