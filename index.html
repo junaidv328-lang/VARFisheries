@@ -99,6 +99,7 @@
             const [showAggregatedDetails, setShowAggregatedDetails] = useState(false);
             const [showItemStock, setShowItemStock] = useState(true); 
             const captureRef = useRef(null);
+            const directEntryCaptureRef = useRef(null); // Added Ref for Direct Entry Receipt
 
             // RECORDS / HISTORY STATE (Managed by Supabase)
             const [savedTrips, setSavedTrips] = useState([]);
@@ -407,9 +408,7 @@
                         });
                     } else if (t.summary) {
                         Object.keys(t.summary).forEach(item => {
-                            // Skip hidden fields (like amount)
-                            if (item.startsWith('__')) return;
-
+                            if (item.startsWith('__')) return; // skip internal fields
                             const cleanItem = item.trim();
                             ensureItem(cleanItem);
                             const qty = Number(t.summary[item]) || 0;
@@ -468,7 +467,7 @@
                     aggregatedTotal += t.totalBoxes;
                     if (t.summary) {
                         Object.keys(t.summary).forEach(item => {
-                            if (!item.startsWith('__')) {
+                            if(!item.startsWith('__')) {
                                 aggregatedItems[item] = (aggregatedItems[item] || 0) + t.summary[item];
                             }
                         });
@@ -550,7 +549,6 @@
             };
 
             // --- EXPENSE MANAGEMENT (SUPABASE) ---
-            // ... (No changes here)
             const addExpense = async () => {
                 if (!expenseAmount) return;
                 const newExpense = {
@@ -584,7 +582,6 @@
             }
 
             // --- DIRECT ENTRY & EDITING ACTIONS ---
-            // ... (No changes here)
             const addTempExpense = () => {
                 if(!tempExpenseAmount) return;
                 setTempExpenses([...tempExpenses, {
@@ -637,7 +634,6 @@
                         totalWeight: count * 35 
                     }));
 
-                // Retrieve Amount from hidden field in summary
                 const savedAmount = trip.summary?.['__transaction_amount'] || trip.transactionAmount || '';
 
                 // Fetch existing expenses linked to this trip from Firestore
@@ -659,8 +655,8 @@
 
             const handleDirectSave = async (shouldDownload) => {
 
-                if (directData.items.length === 0) return alert("Add at least one item");
-                if (!directData.partyName) return alert("Enter Party Name");
+                if (directData.items.length === 0) { alert("Add at least one item"); return false; }
+                if (!directData.partyName) { alert("Enter Party Name"); return false; }
 
                 let totalBoxes = 0;
                 const summary = {};
@@ -690,7 +686,6 @@
                     detailedItems: directData.items,
                     isDirectEntry: true, 
                     driverName: directData.driverName || 'Direct Entry'
-                    // removed transactionAmount from root to prevent DB error
                 };
 
                 try {
@@ -746,10 +741,52 @@
                     setEditingTripId(null);
                     setDirectData({ date: new Date().toISOString().split('T')[0], mode: 'Purchase', partyName: '', refId: '', driverName: '', amount: '', items: [] });
                     setTempExpenses([]);
+                    return true;
 
                 } catch (e) {
                     console.error(e);
                     alert("Error saving record: " + e.message);
+                    return false;
+                }
+            };
+
+            const handleDirectShare = async () => {
+                // Validation checks before generating image
+                if (directData.items.length === 0) return alert("Add at least one item");
+                if (!directData.partyName) return alert("Enter Party Name");
+
+                // 1. Generate Image from Hidden Receipt
+                if (!window.html2canvas || !directEntryCaptureRef.current) return;
+                
+                let imageFile = null;
+                try {
+                    const canvas = await window.html2canvas(directEntryCaptureRef.current, {
+                        backgroundColor: '#ffffff', scale: 2, logging: false, useCORS: true
+                    });
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve));
+                    imageFile = new File([blob], `Receipt_${directData.partyName}.png`, { type: "image/png" });
+                } catch(e) {
+                    console.error("Capture failed", e);
+                    return alert("Failed to generate image");
+                }
+
+                // 2. Save Data (Continue only if save matches validation logic)
+                const success = await handleDirectSave(false); 
+                if (!success) return; // Stop if save failed
+
+                // 3. Share Image
+                if (imageFile) {
+                    if (navigator.share) {
+                        try {
+                            await navigator.share({ files: [imageFile], title: 'Transaction Receipt' });
+                        } catch (e) { console.log("Share cancelled"); }
+                    } else {
+                        // Fallback to download
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(imageFile);
+                        link.download = imageFile.name;
+                        link.click();
+                    }
                 }
             };
 
@@ -777,7 +814,6 @@
                     headers.join(","),
                     ...savedTrips.map(t => [
                         t.tripDate, t.operationMode, t.isDirectEntry ? 'Direct' : 'Truck', t.driverName, t.customerName, t.referenceId, t.totalBoxes,
-                        // Clean summary for CSV
                         JSON.stringify(t.summary, (key, value) => key.startsWith('__') ? undefined : value).replace(/,/g, ';') 
                     ].join(","))
                 ].join("\n");
@@ -788,7 +824,6 @@
             };
 
             // REPORT CAPTURE HANDLER
-            // ... (No changes)
             const handleReportCapture = async () => {
                 if (!window.html2canvas || !window.jspdf) { 
                     alert("Loading PDF tools..."); return; 
@@ -838,7 +873,6 @@
             };
 
             // STOCK SNAPSHOT HANDLER
-            // ... (No changes)
             const handleStockSnapshot = async () => {
                 if (!window.html2canvas || !stockCaptureRef.current) { 
                     alert("Loading image tool..."); return; 
@@ -1574,12 +1608,14 @@
                                                                     </div>
                                                                 ) : (
                                                                     <div className="grid grid-cols-2 gap-1">
-                                                                        {t.summary ? Object.entries(t.summary).map(([item, count]) => (
+                                                                        {t.summary ? Object.entries(t.summary).map(([item, count]) => {
+                                                                            if (item.startsWith('__')) return null;
+                                                                            return (
                                                                             <div key={item} className="flex justify-between bg-gray-50 px-2 py-1 rounded">
                                                                                 <span className="text-gray-600">{item}</span>
                                                                                 <span className="font-bold">{count}</span>
                                                                             </div>
-                                                                        )) : <div className="text-gray-400 italic">No details</div>}
+                                                                        )}) : <div className="text-gray-400 italic">No details</div>}
                                                                     </div>
                                                                 )}
                                                                 <div className="flex justify-end mt-2 gap-2">
@@ -1652,6 +1688,16 @@
                                                                                                 <span className="font-bold text-green-700">₹{p.totalAmount}</span>
                                                                                             </div>
                                                                                         )}
+                                                                                        {/* NOTES DISPLAY (Only if no amount, or additional context needed - here showing if notes exist) */}
+                                                                                        {(!p.totalAmount || p.totalAmount === 0) && p.notes && p.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                {p.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                     </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -1692,6 +1738,16 @@
                                                                                                 <span className="font-bold text-blue-700">₹{s.totalAmount}</span>
                                                                                             </div>
                                                                                         )}
+                                                                                        {/* NOTES DISPLAY */}
+                                                                                        {(!s.totalAmount || s.totalAmount === 0) && s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                     </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -1728,11 +1784,21 @@
                                                                                                     </div>
                                                                                                 ))}
                                                                                             </div>
-                                                                                            {/* AMOUNT DISPLAY (Replaces Notes) */}
+                                                                                            {/* AMOUNT DISPLAY */}
                                                                                             {s.totalAmount > 0 && (
                                                                                                 <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
                                                                                                     <span className="font-bold text-gray-500">Amount Received:</span>
                                                                                                     <span className="font-bold text-blue-700">₹{s.totalAmount}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                            {/* NOTES DISPLAY */}
+                                                                                            {(!s.totalAmount || s.totalAmount === 0) && s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                                <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                    {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                        <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                            <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                        </div>
+                                                                                                    ))}
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
@@ -1855,7 +1921,7 @@
                                                     </div>
 
                                                     <div className="space-y-3 overflow-y-auto flex-1">
-                                                        {/* Restored Date and Mode Fields */}
+                                                        {/* Date & Mode */}
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-gray-400 uppercase">Date / తేదీ</label>
@@ -1870,7 +1936,7 @@
                                                             </div>
                                                         </div>
 
-                                                        {/* Ref and Party Name */}
+                                                        {/* Ref & Party */}
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-gray-400 uppercase">Ref / Bill No / బిల్లు నం.</label>
@@ -1882,7 +1948,7 @@
                                                             </div>
                                                         </div>
 
-                                                        {/* Amount and Driver/Notes */}
+                                                        {/* Amount & Driver */}
                                                         <div className="grid grid-cols-2 gap-2">
                                                             <div>
                                                                 <label className="block text-[10px] font-bold text-gray-400 uppercase">
@@ -1910,7 +1976,6 @@
                                                             <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase">Items List / సరుకుల జాబితా</label>
                                                             {directData.items.length === 0 && <div className="text-center text-xs text-gray-400 italic mb-2">No items added yet / ఇంకా ఏ సరుకులు జోడించలేదు</div>}
                                                             
-                                                            {/* UPDATED: Detailed Table View in Modal */}
                                                             <div className="space-y-2 mb-3">
                                                                 {directData.items.map((item, idx) => (
                                                                     <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border shadow-sm text-xs">
@@ -1980,7 +2045,89 @@
                                                             <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel / రద్దు</button>
                                                             <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record / అప్‌డేట్" : "Save Record / సేవ్ చేయండి"}</button>
                                                         </div>
-                                                        <button onClick={() => handleDirectSave(true)} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2"><FileSpreadsheet size={18}/> Save & Download Excel / సేవ్ & ఎక్సెల్ డౌన్‌లోడ్</button>
+                                                        <button onClick={handleDirectShare} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2">
+                                                            <Share2 size={18}/> Save & Share Image / సేవ్ & షేర్
+                                                        </button>
+
+                                                        {/* HIDDEN RECEIPT TEMPLATE FOR CAPTURE */}
+                                                        <div ref={directEntryCaptureRef} className="absolute left-[-9999px] top-0 w-[400px] bg-white p-6 text-black font-sans border border-gray-300">
+                                                            <div className="text-center border-b-2 border-black pb-2 mb-4">
+                                                                <h2 className="text-xl font-black uppercase">Transaction Receipt</h2>
+                                                                <div className="text-sm text-gray-600">{directData.mode === 'Sales' ? 'Sales / అమ్మకాలు' : 'Purchase / కొనుగోలు'}</div>
+                                                            </div>
+                                                            <div className="flex justify-between text-xs mb-1">
+                                                                <span className="text-gray-500">Date:</span>
+                                                                <span className="font-bold">{directData.date}</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-xs mb-1">
+                                                                <span className="text-gray-500">Ref No:</span>
+                                                                <span className="font-bold">{directData.refId || '-'}</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-xs mb-4">
+                                                                <span className="text-gray-500">Party:</span>
+                                                                <span className="font-bold uppercase text-sm">{directData.partyName}</span>
+                                                            </div>
+
+                                                            <table className="w-full text-xs mb-4 border-collapse">
+                                                                <thead>
+                                                                    <tr className="border-b border-black text-left">
+                                                                        <th className="py-1">Item</th>
+                                                                        <th className="py-1 text-center">Bx</th>
+                                                                        <th className="py-1 text-center">Loose</th>
+                                                                        <th className="py-1 text-right">Total Kg</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {directData.items.map((item, i) => (
+                                                                        <tr key={i} className="border-b border-gray-200">
+                                                                            <td className="py-1">{item.name}</td>
+                                                                            <td className="py-1 text-center">{item.boxes}</td>
+                                                                            <td className="py-1 text-center">{item.looseKg || '-'}</td>
+                                                                            <td className="py-1 text-right">{(item.boxes * 35) + (item.looseKg || 0)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                                <tfoot>
+                                                                    <tr className="font-bold border-t border-black">
+                                                                        <td className="py-2">Total</td>
+                                                                        <td className="py-2 text-center">{directData.items.reduce((s, i) => s + (Number(i.boxes)||0), 0)}</td>
+                                                                        <td className="py-2 text-center">{directData.items.reduce((s, i) => s + (Number(i.looseKg)||0), 0)}</td>
+                                                                        <td className="py-2 text-right">{directData.items.reduce((s, i) => s + ((Number(i.boxes)||0)*35 + (Number(i.looseKg)||0)), 0)}</td>
+                                                                    </tr>
+                                                                </tfoot>
+                                                            </table>
+
+                                                            {directData.amount && (
+                                                                <div className="flex justify-between items-center bg-gray-100 p-2 rounded mb-2">
+                                                                    <span className="text-xs font-bold uppercase">{directData.mode === 'Sales' ? 'Received' : 'Given'}:</span>
+                                                                    <span className="text-lg font-black">₹{directData.amount}</span>
+                                                                </div>
+                                                            )}
+
+                                                            {tempExpenses.length > 0 && (
+                                                                <div className="mb-2 border-t pt-2">
+                                                                    <div className="text-[10px] font-bold uppercase mb-1">Expenses:</div>
+                                                                    {tempExpenses.map(e => (
+                                                                        <div key={e.id} className="flex justify-between text-[10px]">
+                                                                            <span>{e.category}</span>
+                                                                            <span>₹{e.amount}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            <div className="mt-4 pt-2 border-t border-gray-300 flex justify-between items-end">
+                                                                <div className="text-[9px] text-gray-400">
+                                                                    Generated by<br/>Nellore Truck Loader
+                                                                </div>
+                                                                {directData.driverName && (
+                                                                    <div className="text-xs font-bold text-right">
+                                                                        <div className="text-[9px] text-gray-400 font-normal">Driver/Note</div>
+                                                                        {directData.driverName}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
