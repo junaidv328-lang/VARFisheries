@@ -771,10 +771,6 @@
                     return alert("Failed to generate image");
                 }
 
-                // 2. Save Data (Continue only if save matches validation logic)
-                const success = await handleDirectSave(false); 
-                if (!success) return; // Stop if save failed
-
                 // 3. Share Image
                 if (imageFile) {
                     if (navigator.share) {
@@ -2055,7 +2051,7 @@
                                                             <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record / అప్‌డేట్" : "Save Record / సేవ్ చేయండి"}</button>
                                                         </div>
                                                         <button onClick={handleDirectShare} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2">
-                                                            <Share2 size={18}/> Save & Share Image / సేవ్ & షేర్
+                                                            <Share2 size={18}/> Share Image / షేర్
                                                         </button>
 
                                                         {/* HIDDEN RECEIPT TEMPLATE FOR CAPTURE */}
