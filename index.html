@@ -407,6 +407,9 @@
                         });
                     } else if (t.summary) {
                         Object.keys(t.summary).forEach(item => {
+                            // Skip hidden fields (like amount)
+                            if (item.startsWith('__')) return;
+
                             const cleanItem = item.trim();
                             ensureItem(cleanItem);
                             const qty = Number(t.summary[item]) || 0;
@@ -429,7 +432,7 @@
                     if (t.detailedItems) {
                         t.detailedItems.forEach(i => i.name && names.add(i.name));
                     } else if (t.summary) {
-                        Object.keys(t.summary).forEach(k => names.add(k));
+                        Object.keys(t.summary).forEach(k => !k.startsWith('__') && names.add(k));
                     }
                 });
                 return Array.from(names).sort();
@@ -465,7 +468,9 @@
                     aggregatedTotal += t.totalBoxes;
                     if (t.summary) {
                         Object.keys(t.summary).forEach(item => {
-                            aggregatedItems[item] = (aggregatedItems[item] || 0) + t.summary[item];
+                            if (!item.startsWith('__')) {
+                                aggregatedItems[item] = (aggregatedItems[item] || 0) + t.summary[item];
+                            }
                         });
                     }
                 });
@@ -476,7 +481,9 @@
                 const { totalBoxes, summary } = getManifestData();
                 let manifest = `MANIFEST - ${operationMode.toUpperCase()}\nDATE: ${tripDate}\nDRIVER: ${driverName}\nREF: ${referenceId || '-'}\nTARGET: ${targetBoxCount || '-'}\nACTUAL: ${totalBoxes}\nVAR BOXES: ${varBoxCount}\n----------------\n`;
                 Object.keys(summary).forEach(label => {
-                    manifest += `${label}: ${summary[label]} boxes\n`;
+                    if (!label.startsWith('__')) {
+                        manifest += `${label}: ${summary[label]} boxes\n`;
+                    }
                 });
                 return manifest;
             };
@@ -487,9 +494,11 @@
                 if (totalBoxes === 0) return alert("Cannot save empty trip");
 
                 // Convert summary to detailedItems format for consistency
-                const detailedItems = Object.entries(summary).map(([name, count]) => ({
-                    name, boxes: count, looseKg: 0, totalWeight: count * 35
-                }));
+                const detailedItems = Object.entries(summary)
+                    .filter(([name]) => !name.startsWith('__'))
+                    .map(([name, count]) => ({
+                        name, boxes: count, looseKg: 0, totalWeight: count * 35
+                    }));
 
                 const newTripData = {
                     id: Date.now(), // Use timestamp as ID for simplicity
@@ -520,8 +529,10 @@
             };
 
              const clearAllLocalData = async () => {
+                const pwd = prompt("Enter Admin Password to Clear Data:");
+                if (pwd !== "1234") return alert("Incorrect Password");
+
                 if (!window.confirm("DANGER: This will wipe ALL data from the Cloud Database for EVERYONE. Are you sure?")) return;
-                if (!window.confirm("FINAL WARNING: Actions cannot be undone.")) return;
                 
                 try {
                     // Delete all rows where id is not 0 (effectively all)
@@ -539,6 +550,7 @@
             };
 
             // --- EXPENSE MANAGEMENT (SUPABASE) ---
+            // ... (No changes here)
             const addExpense = async () => {
                 if (!expenseAmount) return;
                 const newExpense = {
@@ -572,6 +584,7 @@
             }
 
             // --- DIRECT ENTRY & EDITING ACTIONS ---
+            // ... (No changes here)
             const addTempExpense = () => {
                 if(!tempExpenseAmount) return;
                 setTempExpenses([...tempExpenses, {
@@ -614,16 +627,20 @@
             };
 
             const openEditRecord = async (trip) => {
-                const itemsList = trip.detailedItems || Object.entries(trip.summary || {}).map(([name, count]) => ({ 
-                    name, 
-                    count, 
-                    boxes: count, 
-                    looseKg: 0, 
-                    totalWeight: count * 35 
-                }));
+                const itemsList = trip.detailedItems || Object.entries(trip.summary || {})
+                    .filter(([name]) => !name.startsWith('__'))
+                    .map(([name, count]) => ({ 
+                        name, 
+                        count, 
+                        boxes: count, 
+                        looseKg: 0, 
+                        totalWeight: count * 35 
+                    }));
+
+                // Retrieve Amount from hidden field in summary
+                const savedAmount = trip.summary?.['__transaction_amount'] || trip.transactionAmount || '';
 
                 // Fetch existing expenses linked to this trip from Firestore
-                // Note: expenses state is already synced via onSnapshot
                 const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
                 setTempExpenses(linkedExpenses);
 
@@ -633,7 +650,7 @@
                     partyName: trip.customerName,
                     refId: trip.referenceId,
                     driverName: trip.driverName || '',
-                    amount: trip.transactionAmount || '', // Load existing amount if editing
+                    amount: savedAmount,
                     items: itemsList
                 });
                 setEditingTripId(trip.id);
@@ -655,6 +672,11 @@
                     summary[cleanName] = (summary[cleanName] || 0) + qty;
                 });
 
+                // SAFE FIX: Embed amount into summary to avoid schema error
+                if (directData.amount) {
+                    summary['__transaction_amount'] = parseFloat(directData.amount);
+                }
+
                 const recordId = editingTripId || Date.now();
                 const tripData = {
                     id: recordId,
@@ -667,8 +689,8 @@
                     summary,
                     detailedItems: directData.items,
                     isDirectEntry: true, 
-                    driverName: directData.driverName || 'Direct Entry',
-                    transactionAmount: directData.amount ? parseFloat(directData.amount) : 0 // Save the amount
+                    driverName: directData.driverName || 'Direct Entry'
+                    // removed transactionAmount from root to prevent DB error
                 };
 
                 try {
@@ -755,7 +777,8 @@
                     headers.join(","),
                     ...savedTrips.map(t => [
                         t.tripDate, t.operationMode, t.isDirectEntry ? 'Direct' : 'Truck', t.driverName, t.customerName, t.referenceId, t.totalBoxes,
-                        JSON.stringify(t.summary).replace(/,/g, ';') 
+                        // Clean summary for CSV
+                        JSON.stringify(t.summary, (key, value) => key.startsWith('__') ? undefined : value).replace(/,/g, ';') 
                     ].join(","))
                 ].join("\n");
                 const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -765,6 +788,7 @@
             };
 
             // REPORT CAPTURE HANDLER
+            // ... (No changes)
             const handleReportCapture = async () => {
                 if (!window.html2canvas || !window.jspdf) { 
                     alert("Loading PDF tools..."); return; 
@@ -814,6 +838,7 @@
             };
 
             // STOCK SNAPSHOT HANDLER
+            // ... (No changes)
             const handleStockSnapshot = async () => {
                 if (!window.html2canvas || !stockCaptureRef.current) { 
                     alert("Loading image tool..."); return; 
@@ -863,11 +888,13 @@
                             looseKg: Number(i.looseKg) || 0 
                         }));
                     } else if (t.summary) {
-                        items = Object.entries(t.summary).map(([name, count]) => ({ 
-                            name, 
-                            boxes: Number(count) || 0, 
-                            looseKg: 0 
-                        }));
+                        items = Object.entries(t.summary)
+                            .filter(([name]) => !name.startsWith('__'))
+                            .map(([name, count]) => ({ 
+                                name, 
+                                boxes: Number(count) || 0, 
+                                looseKg: 0 
+                            }));
                     }
 
                     const targetObj = mode === 'Purchase' ? purchases : sales;
@@ -876,9 +903,10 @@
                         targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [], notes: [], totalAmount: 0 };
                     }
 
-                    // Accumulate Transaction Amount
-                    if (t.transactionAmount) {
-                        targetObj[party].totalAmount += parseFloat(t.transactionAmount);
+                    // Accumulate Transaction Amount from summary (Safe approach)
+                    const tAmount = t.summary?.['__transaction_amount'] || t.transactionAmount || 0;
+                    if (tAmount) {
+                        targetObj[party].totalAmount += parseFloat(tAmount);
                     }
 
                     // Collect Driver/Notes (avoid duplicates)
