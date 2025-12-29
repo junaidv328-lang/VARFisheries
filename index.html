@@ -507,8 +507,8 @@
                     driverName,
                     customerName,
                     referenceId,
-                    targetBoxCount,
-                    varBoxCount,
+                    targetBoxCount: targetBoxCount ? parseInt(targetBoxCount) : 0, // Fix: Ensure numeric type
+                    varBoxCount: varBoxCount ? parseInt(varBoxCount) : 0,         // Fix: Ensure numeric type
                     totalBoxes,
                     summary,
                     detailedItems, 
