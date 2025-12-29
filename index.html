@@ -558,7 +558,7 @@
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote,
-                    tripId: 0 // FIX: Added default ID to satisfy database NOT NULL constraint
+                    tripID: 0 // FIX: Added tripID (case-sensitive) as default 0 to satisfy NOT NULL constraint
                 };
                 try {
                     const { error } = await supabase.from('var_truck_expenses').insert([newExpense]);
