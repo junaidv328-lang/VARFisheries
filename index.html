@@ -637,8 +637,8 @@
                 // Retrieve Amount from hidden field in summary
                 const savedAmount = trip.summary?.['__transaction_amount'] || trip.transactionAmount || '';
 
-                // Fetch existing expenses linked to this trip from Firestore
-                const linkedExpenses = expenses.filter(e => e.tripId === trip.id);
+                // Retrieve expenses from hidden field in summary OR root property (for legacy support)
+                const linkedExpenses = trip.summary?.['__expenses'] || trip.additional_expenses || [];
                 setTempExpenses(linkedExpenses);
 
                 setDirectData({
@@ -673,6 +673,11 @@
                 if (directData.amount) {
                     summary['__transaction_amount'] = parseFloat(directData.amount);
                 }
+                
+                // SAFE FIX: Embed expenses into summary to avoid "column does not exist" error
+                if (tempExpenses.length > 0) {
+                    summary['__expenses'] = tempExpenses;
+                }
 
                 const recordId = editingTripId || Date.now();
                 const tripData = {
@@ -687,6 +692,7 @@
                     detailedItems: directData.items,
                     isDirectEntry: true, 
                     driverName: directData.driverName || 'Direct Entry'
+                    // removed transactionAmount and additional_expenses columns to prevent schema errors
                 };
 
                 try {
@@ -694,24 +700,8 @@
                     const { error: tripError } = await supabase.from('var_truck_trips').upsert(tripData);
                     if (tripError) throw tripError;
 
-                    // 2. Handle Expenses
-                    // Delete existing linked expenses
-                    const { error: delError } = await supabase.from('var_truck_expenses').delete().eq('tripId', recordId);
-                    if (delError) throw delError;
-
-                    // Insert new ones
-                    if (tempExpenses.length > 0) {
-                        const expToInsert = tempExpenses.map(exp => ({
-                            id: Date.now() + Math.random(), // Generate unique IDs
-                            timestamp: Date.now(),
-                            date: directData.date,
-                            category: exp.category,
-                            amount: exp.amount,
-                            tripId: recordId
-                        }));
-                        const { error: insError } = await supabase.from('var_truck_expenses').insert(expToInsert);
-                        if (insError) throw insError;
-                    }
+                    // Note: We NO LONGER insert into var_truck_expenses to avoid "column tripId does not exist" error.
+                    // The expenses are now safely stored in the summary JSON.
                     
                     alert(editingTripId ? "Record Updated!" : "Record Saved!");
 
@@ -788,15 +778,15 @@
             };
 
             const deleteTrip = async (id) => {
-                if(window.confirm("Delete this record? This will also delete associated expenses.")) {
+                if(window.confirm("Delete this record?")) {
                     try {
                         // Delete trip
                         const { error: tErr } = await supabase.from('var_truck_trips').delete().eq('id', id);
                         if (tErr) throw tErr;
-
-                        // Delete expenses
-                        const { error: eErr } = await supabase.from('var_truck_expenses').delete().eq('tripId', id);
-                        if (eErr) throw eErr;
+                        
+                        // We don't need to delete linked expenses because they are inside the trip record now.
+                        // (Legacy cleanup: attempt to delete from expense table, ignore error if fails)
+                        supabase.from('var_truck_expenses').delete().eq('tripId', id).then(() => {});
 
                     } catch (e) {
                         alert("Error deleting: " + e.message);
@@ -907,13 +897,30 @@
                 let totalOutBoxes = 0;
                 let totalOutLoose = 0;
 
-                const dailyExpenses = expenses.filter(e => e.date === targetDate);
-                const totalExpenseAmount = dailyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+                // 1. Get Manual Expenses from Table
+                const manualExpenses = expenses.filter(e => e.date === targetDate);
+                
+                // 2. Get Expenses from Trips on that date
+                const tripsOnDate = savedTrips.filter(t => t.tripDate === targetDate);
+                const tripExpenses = tripsOnDate.flatMap(t => {
+                    const embeddedExpenses = t.summary?.['__expenses'] || t.additional_expenses || [];
+                    if (Array.isArray(embeddedExpenses)) {
+                        return embeddedExpenses.map(e => ({
+                            ...e,
+                            source: 'trip',
+                            partyName: t.customerName
+                        }));
+                    }
+                    return [];
+                });
 
-                savedTrips.filter(t => t.tripDate === targetDate).forEach(t => {
+                // Merge for total calculation
+                const allDailyExpenses = [...manualExpenses, ...tripExpenses];
+                const totalExpenseAmount = allDailyExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+                tripsOnDate.forEach(t => {
                     const party = t.customerName || 'Unknown';
                     const mode = t.operationMode;
-                    const tripExpenses = expenses.filter(e => e.tripId === t.id); 
                     
                     let items = [];
                     if (t.detailedItems) {
@@ -938,13 +945,13 @@
                         targetObj[party] = { name: party, items: [], totalBoxes: 0, totalLoose: 0, expenses: [], notes: [], totalAmount: 0 };
                     }
 
-                    // Accumulate Transaction Amount from summary (Safe approach)
+                    // Accumulate Transaction Amount
                     const tAmount = t.summary?.['__transaction_amount'] || t.transactionAmount || 0;
                     if (tAmount) {
                         targetObj[party].totalAmount += parseFloat(tAmount);
                     }
 
-                    // Collect Driver/Notes (avoid duplicates)
+                    // Collect Driver/Notes
                     if (t.driverName) {
                         if (!targetObj[party].notes.includes(t.driverName)) {
                             targetObj[party].notes.push(t.driverName);
@@ -961,9 +968,11 @@
                         }
                     });
 
-                    tripExpenses.forEach(exp => {
-                        targetObj[party].expenses.push(exp);
-                    });
+                    // Add trip specific expenses to the party object for reporting
+                    const embeddedExpenses = t.summary?.['__expenses'] || t.additional_expenses || [];
+                    if (Array.isArray(embeddedExpenses)) {
+                        embeddedExpenses.forEach(exp => targetObj[party].expenses.push(exp));
+                    }
 
                     const tripBoxes = items.reduce((sum, i) => sum + i.boxes, 0);
                     const tripLoose = items.reduce((sum, i) => sum + i.looseKg, 0);
@@ -986,7 +995,7 @@
                     totalInBoxes, totalInLoose, 
                     totalOutBoxes, totalOutLoose,
                     totalExpenseAmount,
-                    dailyExpenses 
+                    dailyExpenses: allDailyExpenses // Export merged list
                 };
             };
 
@@ -1352,25 +1361,26 @@
                                     <div className="border-t pt-2">
                                         <div className="text-[10px] text-gray-400 font-bold uppercase mb-2">Expenses for {reportDate}</div>
                                         <div className="space-y-2 max-h-40 overflow-y-auto">
-                                            {expenses.filter(e => e.date === reportDate).length === 0 ? (
+                                            {getDailyReportStats(reportDate).dailyExpenses.length === 0 ? (
                                                 <div className="text-center text-xs text-gray-300 italic">No expenses added today</div>
                                             ) : (
-                                                expenses.filter(e => e.date === reportDate).map(exp => (
-                                                    <div key={exp.id} className="flex justify-between items-center bg-orange-50 p-2 rounded border border-orange-100 text-xs">
+                                                getDailyReportStats(reportDate).dailyExpenses.map((exp, idx) => (
+                                                    <div key={idx} className="flex justify-between items-center bg-orange-50 p-2 rounded border border-orange-100 text-xs">
                                                         <div>
-                                                            <div className="font-bold text-gray-700">{exp.category}</div>
+                                                            <div className="font-bold text-gray-700">{exp.category} {exp.source === 'trip' && <span className="text-[9px] text-blue-500 font-normal">(Trip: {exp.partyName})</span>}</div>
                                                             {exp.note && <div className="text-[10px] text-gray-500">{exp.note}</div>}
                                                         </div>
                                                         <div className="flex items-center gap-3">
                                                             <span className="font-bold text-orange-700">₹{exp.amount}</span>
-                                                            <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                                                            {/* Only allow deleting manual expenses here */}
+                                                            {!exp.source && <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={14}/></button>}
                                                         </div>
                                                     </div>
                                                 ))
                                             )}
                                         </div>
                                         <div className="mt-2 text-right font-bold text-sm text-gray-800">
-                                            Total: ₹{expenses.filter(e => e.date === reportDate).reduce((sum, e) => sum + (e.amount || 0), 0)}
+                                            Total: ₹{getDailyReportStats(reportDate).totalExpenseAmount}
                                         </div>
                                     </div>
                                 </div>
@@ -2051,7 +2061,7 @@
                                                             <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record / అప్‌డేట్" : "Save Record / సేవ్ చేయండి"}</button>
                                                         </div>
                                                         <button onClick={handleDirectShare} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2">
-                                                            <Share2 size={18}/> Share Image / షేర్
+                                                            <Share2 size={18}/> Save & Share Image / సేవ్ & షేర్
                                                         </button>
 
                                                         {/* HIDDEN RECEIPT TEMPLATE FOR CAPTURE */}
