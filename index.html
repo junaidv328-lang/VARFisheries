@@ -558,7 +558,7 @@
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote,
-                    tripID: 0 // FIX: Added tripID (case-sensitive) as default 0 to satisfy NOT NULL constraint
+                    tripID: 0 // FIX: Correct casing for database column to satisfy NOT NULL constraint
                 };
                 try {
                     const { error } = await supabase.from('var_truck_expenses').insert([newExpense]);
@@ -573,11 +573,18 @@
 
             const deleteExpense = async (id) => {
                 if(window.confirm("Delete this expense?")) {
+                    // Optimistic update: Remove from UI immediately
+                    setExpenses(prev => prev.filter(e => e.id !== id));
+
                     try {
                         const { error } = await supabase.from('var_truck_expenses').delete().eq('id', id);
                         if (error) throw error;
                     } catch (e) {
+                        console.error(e);
                         alert("Error deleting: " + e.message);
+                        // Revert/Fetch if failed to sync state
+                        const { data } = await supabase.from('var_truck_expenses').select('*').order('timestamp', { ascending: false });
+                        if(data) setExpenses(data);
                     }
                 }
             }
