@@ -551,6 +551,7 @@
             // --- EXPENSE MANAGEMENT (SUPABASE) ---
             const addExpense = async () => {
                 if (!expenseAmount) return;
+                
                 const newExpense = {
                     id: Date.now(),
                     timestamp: Date.now(),
@@ -558,16 +559,34 @@
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote,
-                    tripID: 0 // FIX: Correct casing for database column to satisfy NOT NULL constraint
+                    tripID: 0 // Using tripID (case sensitive based on error logs)
                 };
+
+                // Optimistic Update: Add to UI immediately
+                setExpenses(prev => [newExpense, ...prev]);
+                setExpenseAmount('');
+                setExpenseNote('');
+
                 try {
                     const { error } = await supabase.from('var_truck_expenses').insert([newExpense]);
-                    if (error) throw error;
-                    setExpenseAmount('');
-                    setExpenseNote('');
+                    if (error) {
+                        // If standard insert failed, try snake_case as fallback
+                         if (error.message.includes('column "tripID" does not exist')) {
+                             console.warn("Retrying with trip_id...");
+                             const retryExpense = { ...newExpense };
+                             delete retryExpense.tripID;
+                             retryExpense.trip_id = 0; 
+                             const { error: retryError } = await supabase.from('var_truck_expenses').insert([retryExpense]);
+                             if (retryError) throw retryError;
+                         } else {
+                             throw error;
+                         }
+                    }
                 } catch (e) {
                     console.error(e);
-                    alert("Error adding expense: " + e.message + " (Check RLS)");
+                    alert("Error adding expense: " + e.message);
+                    // Rollback optimistic update on failure
+                    setExpenses(prev => prev.filter(x => x.id !== newExpense.id));
                 }
             };
 
@@ -1576,7 +1595,7 @@
                                             {activeTab === 'records' && (
                                                 <div className="mt-4">
                                                     <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
-                                                        <Share2 size={20}/> Share Image / షేర్
+                                                        <Camera size={20}/> Share Image
                                                     </button>
                                                 </div>
                                             )}
@@ -1927,7 +1946,7 @@
                                                     </div>
                                                     <div className="mt-4">
                                                         <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
-                                                            <Share2 size={20}/> Share Image / షేర్
+                                                            <Camera size={20}/> Share Image
                                                         </button>
                                                     </div>
                                                 </div>
