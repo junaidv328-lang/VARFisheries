@@ -100,6 +100,9 @@
             const [showItemStock, setShowItemStock] = useState(true); 
             const captureRef = useRef(null);
             const directEntryCaptureRef = useRef(null); // Ref for Direct Entry Receipt
+            const reportCaptureRef = useRef(null);
+            const stockCaptureRef = useRef(null);
+            const visualReportCaptureRef = useRef(null); // New ref for Visual Report
 
             // RECORDS / HISTORY STATE (Managed by Supabase)
             const [savedTrips, setSavedTrips] = useState([]);
@@ -120,9 +123,8 @@
 
             const [showReportModal, setShowReportModal] = useState(false);
             const [showStockSnapshotModal, setShowStockSnapshotModal] = useState(false);
+            const [showVisualReportModal, setShowVisualReportModal] = useState(false);
             const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
-            const reportCaptureRef = useRef(null);
-            const stockCaptureRef = useRef(null);
 
             const [showDirectEntry, setShowDirectEntry] = useState(false);
             const [directData, setDirectData] = useState({
@@ -559,7 +561,7 @@
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote,
-                    tripID: 0 // Using tripID (case sensitive based on error logs)
+                    trip_id: 0 // Changed to standard snake_case to fix "column not found"
                 };
 
                 // Optimistic Update: Add to UI immediately
@@ -570,12 +572,12 @@
                 try {
                     const { error } = await supabase.from('var_truck_expenses').insert([newExpense]);
                     if (error) {
-                        // If standard insert failed, try snake_case as fallback
-                         if (error.message.includes('column "tripID" does not exist')) {
-                             console.warn("Retrying with trip_id...");
+                        // If standard snake_case failed, try camelCase as fallback (retry logic)
+                         if (error.message.includes('column "trip_id" does not exist')) {
+                             console.warn("Retrying with tripID...");
                              const retryExpense = { ...newExpense };
-                             delete retryExpense.tripID;
-                             retryExpense.trip_id = 0; 
+                             delete retryExpense.trip_id;
+                             retryExpense.tripID = 0; // Try tripID
                              const { error: retryError } = await supabase.from('var_truck_expenses').insert([retryExpense]);
                              if (retryError) throw retryError;
                          } else {
@@ -844,7 +846,9 @@
                     alert("Loading PDF tools..."); return; 
                 } 
                 
-                const input = reportCaptureRef.current;
+                // Determine which ref to use based on which modal is open
+                const input = showVisualReportModal ? visualReportCaptureRef.current : reportCaptureRef.current;
+                
                 if (!input) return;
 
                 try {
@@ -854,10 +858,12 @@
                     clone.style.top = '-10000px';
                     clone.style.left = '0';
                     clone.style.zIndex = '-1';
+                    // Ensure background is white for charts
+                    clone.style.backgroundColor = '#ffffff'; 
                     document.body.appendChild(clone);
 
                     const canvas = await window.html2canvas(clone, { 
-                        scale: 3, 
+                        scale: 2, // Slightly lower scale for charts to manage file size
                         logging: false, 
                         useCORS: true,
                         windowWidth: 1000
@@ -875,12 +881,14 @@
                     
                     pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
                     
+                    const fileName = showVisualReportModal ? `Visual_Report_${reportDate}.pdf` : `Daily_Report_${reportDate}.pdf`;
+                    
                     if (navigator.share) {
                         const pdfBlob = pdf.output('blob');
-                        const file = new File([pdfBlob], `Daily_Report_${reportDate}.pdf`, { type: "application/pdf" });
-                        await navigator.share({ files: [file], title: `Daily Report ${reportDate}` });
+                        const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+                        await navigator.share({ files: [file], title: `Report ${reportDate}` });
                     } else {
-                        pdf.save(`Daily_Report_${reportDate}.pdf`);
+                        pdf.save(fileName);
                     }
                 } catch (error) { 
                     console.error(error); alert("Report generation failed"); 
@@ -1026,197 +1034,98 @@
                 };
             };
 
-            const handleCapture = async () => {
-                if (!window.html2canvas || !captureRef.current) { 
-                    alert("Loading image tool..."); return; 
-                } 
-                try {
-                    window.scrollTo(0,0);
-                    const canvas = await window.html2canvas(captureRef.current, { 
-                        backgroundColor: '#ffffff', scale: 3, logging: false, useCORS: true 
-                    });
-                    const imgData = canvas.toDataURL('image/png');
-                    setGeneratedImage(imgData);
-                    
-                    if (navigator.share) {
-                        try {
-                            canvas.toBlob(async (blob) => {
-                                const file = new File([blob], "load-plan.png", { type: "image/png" });
-                                await navigator.share({ files: [file], title: 'Load Plan' });
-                            });
-                        } catch (err) {
-                            console.log("Share skipped or failed, falling back to display");
-                        }
-                    } 
-                } catch (error) { 
-                    console.error(error); alert("Image generation failed"); 
-                }
-            };
+            // --- HELPER COMPONENTS FOR CHARTS (Rendered as SVG) ---
             
-            const downloadImage = () => {
-                if (!generatedImage) return;
-                const link = document.createElement('a');
-                link.href = generatedImage;
-                link.download = `LoadPlan-${tripDate}.png`;
-                link.click();
-            }
-
-            // --- RENDERERS ---
-
-            const renderCell = (type, major, minor, label, isStatic) => {
-                const { count, max } = getStackStats(type, major, minor);
-                const isFull = count === max;
-                const isEmpty = count === 0;
-                const orientation = getStackOrientation(type, major, minor);
-
-                if (isStatic) {
-                    const stackContent = [];
-                    for (let h = max - 1; h >= 0; h--) {
-                        const box = getBox(type, major, minor, h);
-                        stackContent.push(
-                            <div key={h} className={`flex-1 flex items-center justify-center text-[9px] leading-none px-0.5 text-center overflow-hidden border-b border-white/20 last:border-0 ${box.filled ? 'bg-blue-600 text-white font-semibold' : 'bg-gray-100 text-gray-300'}`}>
-                                {box.filled ? (box.label || 'Item') : '-'}
-                            </div>
-                        );
-                    }
-                    const unitPixelHeight = orientation === 'Vertical' ? 30 : 24;
-                    const calculatedHeight = 16 + (max * unitPixelHeight);
-                    return (
-                        <div className={`relative w-full border border-gray-300 rounded overflow-hidden flex flex-col bg-gray-50 text-xs shadow-sm transition-all`} style={{ height: `${calculatedHeight}px` }}>
-                            <div className="bg-gray-200 text-gray-600 text-[8px] font-bold py-0.5 flex justify-between px-1 items-center">
-                                <span>{label}</span>
-                                <span className="font-extrabold text-blue-800">{orientation === 'Horizontal' ? 'H' : 'V'}</span>
-                            </div>
-                            <div className="flex-1 flex flex-col">{stackContent}</div>
-                        </div>
-                    );
-                } else {
-                    let bgColor = 'bg-gray-100';
-                    if (!isEmpty) bgColor = 'bg-blue-100';
-                    if (isFull) bgColor = 'bg-blue-500 text-white';
-                    const isSelected = selectedCell && selectedCell.type === type && 
-                                                 ((type === 'lane' && selectedCell.laneId === major && selectedCell.stackIdx === minor) ||
-                                                  (type === 'row' && selectedCell.rowIdx === major && selectedCell.colIdx === minor));
-                    if (isSelected) bgColor = 'ring-4 ring-yellow-400 ' + bgColor;
-                    const handleClick = () => {
-                        if (type === 'lane') setSelectedCell({ type: 'lane', laneId: major, stackIdx: minor });
-                        else setSelectedCell({ type: 'row', rowIdx: major, colIdx: minor });
-                    };
-                    return (
-                        <div onClick={handleClick} className={`relative h-16 w-full border-2 border-dashed border-gray-300 rounded-lg transition-all flex flex-col items-center justify-center cursor-pointer hover:shadow-md ${bgColor}`}>
-                            <span className="font-bold text-lg">{count}</span>
-                            <div className="absolute top-1 left-1 text-[10px] opacity-50 font-bold">{label}</div>
-                            <div className="absolute top-1 right-1">
-                                {orientation === 'Horizontal' ? <div className="text-[9px] font-black bg-white/50 px-1 rounded text-gray-600">H</div> : <div className="text-[9px] font-black bg-white/50 px-1 rounded text-gray-600">V</div>}
-                            </div>
-                            <div className="absolute bottom-1 flex gap-0.5 max-w-full overflow-hidden px-1">
-                                {[...Array(max)].map((_, i) => (<div key={i} className={`w-1 h-1 rounded-full ${i < count ? 'bg-green-400' : 'bg-gray-300'}`} />))}
-                            </div>
-                        </div>
-                    );
-                }
-            };
-
-            const renderVisualizer = (isStatic = false) => {
+            const SimpleBarChart = ({ data }) => {
+                // data: [{ label, in, out }]
+                const maxVal = Math.max(...data.map(d => Math.max(d.in, d.out)), 10); // Min height 10
+                const height = 150;
+                
                 return (
-                    <div className="flex flex-col gap-6">
-                        {lanes.length > 0 && (
-                            <div>
-                                {!isStatic && <div className="flex items-center gap-2 text-xs font-bold text-blue-900 mb-2 border-b pb-1"><Layout size={14}/> MAIN COLUMNS (LANES)</div>}
-                                <div className="flex gap-2 w-full justify-between">
-                                    {lanes.map((lane) => (
-                                        <div key={lane.id} className="flex-1 flex flex-col gap-2 min-w-0">
-                                            {!isStatic && <div className="text-center text-[10px] font-bold text-gray-400 uppercase truncate">{lane.name}</div>}
-                                            {[...Array(lane.stacks)].map((_, stackIdx) => <div key={stackIdx}>{renderCell('lane', lane.id, stackIdx, `#${stackIdx+1}`, isStatic)}</div>)}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {rows.length > 0 && (
-                            <div>
-                                {!isStatic && <div className="flex items-center gap-2 text-xs font-bold text-orange-900 mb-2 border-b border-orange-200 pb-1 mt-4"><Grid size={14}/> IRREGULAR ROWS</div>}
-                                <div className="flex flex-col gap-4">
-                                    {rows.map((row, rIdx) => (
-                                        <div key={row.id} className="relative">
-                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R{rIdx+1}</div>
-                                            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${row.cols}, minmax(0, 1fr))` }}>
-                                                {[...Array(row.cols)].map((_, cIdx) => <div key={cIdx}>{renderCell('row', rIdx, cIdx, `C${cIdx+1}`, isStatic)}</div>)}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {rows.length === 0 && lanes.length === 0 && <div className="text-center p-8 text-gray-400 italic">No layout configured. Go to Config tab.</div>}
-                    </div>
-                );
-            };
-
-            const renderStackEditor = () => {
-                if (!selectedCell) return null;
-                let type, major, minor, title, subtitle;
-                type = selectedCell.type;
-
-                if (type === 'lane') {
-                    major = selectedCell.laneId; minor = selectedCell.stackIdx;
-                    const lane = lanes.find(l => l.id === major); if (!lane) return null;
-                    title = lane.name; subtitle = `Stack #${minor + 1}`;
-                } else {
-                    major = selectedCell.rowIdx; minor = selectedCell.colIdx;
-                    const row = rows[major]; if (!row) return null;
-                    title = `Row ${major + 1}`; subtitle = `Column ${minor + 1}`;
-                }
-
-                const heightLimit = getStackHeight(type, major, minor);
-                const orientation = getStackOrientation(type, major, minor);
-                const boxes = [];
-
-                for (let h = heightLimit - 1; h >= 0; h--) {
-                    const box = getBox(type, major, minor, h);
-                    boxes.push(
-                        <div key={h} className={`p-3 rounded border-2 mb-2 flex justify-between items-center transition-all ${box.filled ? 'bg-blue-600 border-blue-700 text-white shadow-md' : 'bg-white border-gray-200 text-gray-400 border-dashed'}`}>
-                            <div className="flex items-center gap-3"><span className="font-mono text-xs opacity-50">H{h+1}</span>{box.filled ? <div className="font-bold">{box.label}</div> : <div className="italic text-sm">Empty Slot</div>}</div>
-                            <div className="flex gap-2">
-                                {box.filled ? (<button onClick={() => updateBox(type, major, minor, h, { filled: false, label: '' })} className="p-1 hover:text-red-300"><Trash2 size={16} /></button>) : (<button onClick={() => updateBox(type, major, minor, h, { filled: true, label: batchInput || 'Unlabeled' })} className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">Load</button>)}
-                            </div>
-                        </div>
-                    );
-                }
-                return (
-                    <div className="bg-gray-50 p-4 rounded-lg border shadow-inner">
-                         <div className="flex flex-col gap-3 mb-4 border-b pb-4">
-                            <div className="flex justify-between items-center">
-                                <div><h3 className="font-bold text-gray-800">{title}</h3><div className="text-xs text-gray-500">{subtitle}</div></div>
-                                <button onClick={() => fillStack(type, major, minor)} className="text-xs bg-blue-600 text-white px-3 py-2 rounded shadow hover:bg-blue-700 disabled:opacity-50 font-bold" disabled={!batchInput}>Fill All</button>
-                            </div>
-
-                            {/* Controls Row */}
-                            <div className="flex gap-2 mt-2">
-                                {/* Orientation */}
-                                <div className="flex-1 flex items-center justify-between bg-white p-2 rounded border">
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Orientation</span>
-                                    <button onClick={() => toggleStackOrientation(type, major, minor)} className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold transition-colors ${orientation === 'Horizontal' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                                        {orientation === 'Horizontal' ? <GripHorizontal size={12}/> : <GripVertical size={12}/>} {orientation}
-                                    </button>
-                                </div>
-                                {/* Height Adjuster */}
-                                <div className="flex-1 flex items-center justify-between bg-white p-2 rounded border">
-                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Capacity: {heightLimit}</span>
-                                    <div className="flex gap-1">
-                                        <button onClick={() => adjustStackHeight(type, major, minor, -1)} className="text-red-500 hover:bg-red-50 rounded p-0.5"><MinusCircle size={16}/></button>
-                                        <button onClick={() => adjustStackHeight(type, major, minor, 1)} className="text-green-500 hover:bg-green-50 rounded p-0.5"><PlusCircle size={16}/></button>
+                    <div className="flex items-end h-[180px] gap-4 overflow-x-auto pb-6 pt-4 px-2">
+                        {data.map((d, i) => (
+                            <div key={i} className="flex flex-col items-center group relative">
+                                <div className="flex items-end gap-1 border-b border-gray-300 pb-1">
+                                    {/* In Bar */}
+                                    <div className="relative flex flex-col justify-end group-hover:opacity-90 transition-all" style={{ height: `${height}px` }}>
+                                        <div 
+                                            className="bg-green-500 w-[20px] rounded-t-sm transition-all" 
+                                            style={{ height: `${(d.in / maxVal) * 100}%`, minHeight: d.in > 0 ? '4px' : '0' }}
+                                        ></div>
+                                        {d.in > 0 && <span className="absolute -top-4 w-full text-center text-[9px] font-bold text-green-700">{d.in}</span>}
+                                    </div>
+                                    {/* Out Bar */}
+                                    <div className="relative flex flex-col justify-end group-hover:opacity-90 transition-all" style={{ height: `${height}px` }}>
+                                        <div 
+                                            className="bg-blue-500 w-[20px] rounded-t-sm transition-all" 
+                                            style={{ height: `${(d.out / maxVal) * 100}%`, minHeight: d.out > 0 ? '4px' : '0' }}
+                                        ></div>
+                                        {d.out > 0 && <span className="absolute -top-4 w-full text-center text-[9px] font-bold text-blue-700">{d.out}</span>}
                                     </div>
                                 </div>
+                                <div className="text-[9px] font-bold text-gray-600 mt-2 rotate-[-45deg] origin-top-left w-[10px] whitespace-nowrap">{d.label}</div>
                             </div>
-                        </div>
-                        {boxes}
-                        <div className="text-center text-xs text-gray-400 mt-2">Floor Level</div>
+                        ))}
                     </div>
                 );
             };
 
-            const aggregatedStats = getAggregatedStats();
+            const SimpleDonutChart = ({ data }) => {
+                // data: [{ label, value, color }]
+                const total = data.reduce((sum, d) => sum + d.value, 0);
+                if (total === 0) return <div className="text-xs text-gray-400 text-center py-10">No Stock Data</div>;
+
+                let cumulativePercent = 0;
+                
+                // Create SVG circles
+                const slices = data.map((d, i) => {
+                    const percent = d.value / total;
+                    const dashArray = `${percent * 100} 100`;
+                    const dashOffset = -cumulativePercent * 100;
+                    cumulativePercent += percent;
+                    return (
+                        <circle 
+                            key={i} 
+                            r="16" 
+                            cx="16" 
+                            cy="16" 
+                            fill="transparent" 
+                            stroke={d.color} 
+                            strokeWidth="8" 
+                            strokeDasharray={dashArray} 
+                            strokeDashoffset={dashOffset} 
+                            transform="rotate(-90 16 16)"
+                        />
+                    );
+                });
+
+                return (
+                    <div className="flex items-center gap-6">
+                        <div className="relative w-32 h-32">
+                            <svg viewBox="0 0 32 32" className="w-full h-full transform transition-transform hover:scale-105">
+                                {slices}
+                                <circle r="16" cx="16" cy="16" fill="transparent" stroke="#f3f4f6" strokeWidth="8" style={{zIndex: -1}} />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-xl font-black text-gray-700">{total}</span>
+                                <span className="text-[8px] text-gray-400 uppercase font-bold">Total Boxes</span>
+                            </div>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                            {data.sort((a,b) => b.value - a.value).slice(0, 5).map((d, i) => (
+                                <div key={i} className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+                                        <span className="text-gray-600 truncate max-w-[80px]">{d.label}</span>
+                                    </div>
+                                    <span className="font-bold">{d.value}</span>
+                                </div>
+                            ))}
+                            {data.length > 5 && <div className="text-[9px] text-gray-400 italic text-right">+{data.length - 5} more items</div>}
+                        </div>
+                    </div>
+                );
+            };
 
             // --- UI ---
             return (
@@ -1338,10 +1247,17 @@
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4"><ImageIcon size={20} className="text-purple-600"/> Daily Activity</h3>
                                 
                                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg shadow-sm mb-6">
-                                    <p className="text-xs text-gray-500 mb-3">Generate a visual report of Purchase vs Sales for a specific day.</p>
-                                    <div className="flex gap-2">
+                                    <p className="text-xs text-gray-500 mb-3">Generate reports for a specific day.</p>
+                                    <div className="flex gap-2 mb-3">
                                         <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="border p-2 rounded text-sm flex-1"/>
-                                        <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center gap-2 justify-center"><FilePdf size={16}/> Download PDF Report</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <button onClick={() => { setShowVisualReportModal(true); }} className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 rounded-lg font-bold text-sm shadow hover:shadow-lg flex items-center justify-center gap-2 transform transition-transform active:scale-95">
+                                            <BarChart3 size={18}/> View Visual Charts (New)
+                                        </button>
+                                        <button onClick={() => { setShowVisualReportModal(false); setShowReportModal(true); }} className="bg-white border border-purple-200 text-purple-700 px-4 py-2 rounded-lg font-bold text-sm hover:bg-purple-50 flex items-center justify-center gap-2">
+                                            <FileText size={16}/> Text Report (PDF)
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1595,7 +1511,7 @@
                                             {activeTab === 'records' && (
                                                 <div className="mt-4">
                                                     <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
-                                                        <Camera size={20}/> Share Image
+                                                        <Camera size={20}/> Share Image / షేర్
                                                     </button>
                                                 </div>
                                             )}
@@ -1887,67 +1803,139 @@
                                                     </div>
                                                     
                                                     <div className="mt-4 flex justify-end gap-2">
-                                                        <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download High-Res PDF</button>
+                                                        <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download PDF</button>
                                                     </div>
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* --- FULL STOCK SNAPSHOT MODAL --- */}
-                                        {showStockSnapshotModal && (
+                                        {/* --- VISUAL REPORT MODAL --- */}
+                                        {showVisualReportModal && (
                                             <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-                                                <div className="bg-white w-full max-w-md p-4 rounded-xl shadow-2xl flex flex-col max-h-[95vh]">
+                                                <div className="bg-white w-full max-w-5xl p-4 rounded-xl shadow-2xl flex flex-col max-h-[95vh]">
                                                     <div className="flex justify-between items-center mb-4">
-                                                        <h3 className="font-bold text-lg">Stock List Snapshot</h3>
-                                                        <button onClick={() => setShowStockSnapshotModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
+                                                        <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><BarChart3 className="text-blue-600"/> Visual Report</h3>
+                                                        <button onClick={() => setShowVisualReportModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
                                                     </div>
-                                                    <div className="flex-1 overflow-auto bg-gray-100 p-2 rounded border">
-                                                        <div ref={stockCaptureRef} className="bg-white p-4">
-                                                            <div className="text-center border-b pb-2 mb-2">
-                                                                <h2 className="font-black text-xl uppercase">Full Stock Report</h2>
-                                                                <div className="text-xs text-gray-500">{new Date().toDateString()}</div>
+
+                                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
+                                                        {/* VISUAL REPORT CANVAS */}
+                                                        <div ref={visualReportCaptureRef} className="bg-white p-8 w-[800px] shadow-2xl text-gray-800">
+                                                            {/* Header */}
+                                                            <div className="flex justify-between items-end border-b-2 border-gray-800 pb-4 mb-6">
+                                                                <div>
+                                                                    <h1 className="text-3xl font-black uppercase text-gray-900 tracking-tight">Daily Balance Report</h1>
+                                                                    <div className="text-sm font-bold text-gray-500 mt-1 flex items-center gap-2"><Calendar size={14}/> {new Date(reportDate).toDateString()}</div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className="text-xs text-gray-400 uppercase font-bold tracking-widest">Nellore Truck Loader</div>
+                                                                    <div className="text-xs text-gray-400">Automated Report</div>
+                                                                </div>
                                                             </div>
-                                                            <table className="w-full text-xs border-collapse">
-                                                                <thead>
-                                                                    <tr className="text-[10px] uppercase text-gray-500 border-b bg-gray-50">
-                                                                        <th className="text-left p-2">Item</th>
-                                                                        <th className="text-right p-2 text-green-700">In</th>
-                                                                        <th className="text-right p-2 text-blue-700">Out</th>
-                                                                        <th className="text-right p-2 text-black">Bal</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody className="divide-y divide-gray-100">
-                                                                    {Object.entries(stockTotals.itemStats).map(([item, stats]) => {
-                                                                        const balBoxes = stats.in.boxes - stats.out.boxes;
-                                                                        const balLoose = stats.in.loose - stats.out.loose;
-                                                                        return (
-                                                                            <tr key={item}>
-                                                                                <td className="p-2 font-bold text-gray-700">{item}</td>
-                                                                                <td className="p-2 text-right">{renderQtyCell(stats.in.boxes, stats.in.loose, "")}</td>
-                                                                                <td className="p-2 text-right">{renderQtyCell(stats.out.boxes, stats.out.loose, "")}</td>
-                                                                                <td className="p-2 text-right font-bold">
-                                                                                    <div>{balBoxes} Bx</div>
-                                                                                    {balLoose !== 0 && <div className="text-[9px] text-gray-400">{balLoose > 0 ? '+' : ''}{balLoose} Kg</div>}
-                                                                                </td>
-                                                                            </tr>
-                                                                        );
-                                                                    })}
-                                                                </tbody>
-                                                                <tfoot className="border-t-2 border-black">
-                                                                    <tr className="font-bold">
-                                                                        <td className="p-2 uppercase">Total</td>
-                                                                        <td className="p-2 text-right">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.in.boxes, 0)}</td>
-                                                                        <td className="p-2 text-right">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + s.out.boxes, 0)}</td>
-                                                                        <td className="p-2 text-right">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + (s.in.boxes - s.out.boxes), 0)}</td>
-                                                                    </tr>
-                                                                </tfoot>
-                                                            </table>
+
+                                                            {(() => {
+                                                                const stats = getDailyReportStats(reportDate);
+                                                                // Prepare Chart Data for Day
+                                                                const dayItems = new Set([...stats.purchases.map(p=>p.name), ...stats.sales.map(s=>s.name)]);
+                                                                const chartData = Array.from(dayItems).map(item => {
+                                                                    const p = stats.purchases.find(x => x.name === item);
+                                                                    const s = stats.sales.find(x => x.name === item);
+                                                                    return {
+                                                                        label: item,
+                                                                        in: p ? p.totalBoxes : 0,
+                                                                        out: s ? s.totalBoxes : 0
+                                                                    };
+                                                                }).sort((a,b) => (b.in + b.out) - (a.in + a.out)); // Sort by activity
+
+                                                                // Prepare Stock Composition Data (Global Stock)
+                                                                const stockColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+                                                                const stockData = Object.entries(stockTotals.itemStats).map(([item, stat], idx) => ({
+                                                                    label: item,
+                                                                    value: stat.in.boxes - stat.out.boxes,
+                                                                    color: stockColors[idx % stockColors.length]
+                                                                })).filter(d => d.value > 0);
+
+                                                                return (
+                                                                    <div className="space-y-8">
+                                                                        {/* KPI CARDS */}
+                                                                        <div className="grid grid-cols-3 gap-4">
+                                                                            <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                                                                                <div className="text-xs font-bold text-green-600 uppercase mb-1">Total Inward</div>
+                                                                                <div className="text-3xl font-black text-green-800">{stats.totalInBoxes} <span className="text-sm font-normal text-green-600">Box</span></div>
+                                                                            </div>
+                                                                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                                                                <div className="text-xs font-bold text-blue-600 uppercase mb-1">Total Outward</div>
+                                                                                <div className="text-3xl font-black text-blue-800">{stats.totalOutBoxes} <span className="text-sm font-normal text-blue-600">Box</span></div>
+                                                                            </div>
+                                                                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                                                                <div className="text-xs font-bold text-gray-500 uppercase mb-1">Net Movement</div>
+                                                                                <div className={`text-3xl font-black ${stats.totalInBoxes - stats.totalOutBoxes >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
+                                                                                    {stats.totalInBoxes - stats.totalOutBoxes >= 0 ? '+' : ''}{stats.totalInBoxes - stats.totalOutBoxes}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* CHARTS SECTION */}
+                                                                        <div className="grid grid-cols-2 gap-8">
+                                                                            {/* Bar Chart */}
+                                                                            <div className="bg-white border rounded-xl p-4 shadow-sm">
+                                                                                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                                                                                    <h3 className="font-bold text-gray-700 flex items-center gap-2"><BarChart3 size={16}/> Daily Activity</h3>
+                                                                                    <div className="flex gap-2 text-[10px] font-bold uppercase">
+                                                                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-sm"></div> In</span>
+                                                                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-sm"></div> Out</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {chartData.length > 0 ? <SimpleBarChart data={chartData} /> : <div className="text-center py-10 text-gray-300 italic">No activity today</div>}
+                                                                            </div>
+
+                                                                            {/* Pie Chart */}
+                                                                            <div className="bg-white border rounded-xl p-4 shadow-sm">
+                                                                                <div className="mb-4 border-b pb-2">
+                                                                                    <h3 className="font-bold text-gray-700 flex items-center gap-2"><BoxIcon size={16}/> Current Stock Holding</h3>
+                                                                                </div>
+                                                                                <SimpleDonutChart data={stockData} />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* DETAILED TABLE */}
+                                                                        <div>
+                                                                            <h3 className="font-bold text-gray-800 mb-2 uppercase text-sm border-l-4 border-gray-800 pl-2">Item-wise Breakdown</h3>
+                                                                            <table className="w-full text-sm border border-gray-200">
+                                                                                <thead className="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
+                                                                                    <tr>
+                                                                                        <th className="p-2 text-left border-r">Item</th>
+                                                                                        <th className="p-2 text-right border-r text-green-700">Inward</th>
+                                                                                        <th className="p-2 text-right border-r text-blue-700">Outward</th>
+                                                                                        <th className="p-2 text-right">Net</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-gray-100">
+                                                                                    {chartData.map((d, i) => (
+                                                                                        <tr key={i} className="hover:bg-gray-50">
+                                                                                            <td className="p-2 font-bold text-gray-700 border-r">{d.label}</td>
+                                                                                            <td className="p-2 text-right text-green-700 border-r">{d.in > 0 ? d.in : '-'}</td>
+                                                                                            <td className="p-2 text-right text-blue-700 border-r">{d.out > 0 ? d.out : '-'}</td>
+                                                                                            <td className="p-2 text-right font-bold text-gray-800">{d.in - d.out > 0 ? `+${d.in - d.out}` : d.in - d.out}</td>
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+
+                                                                        {/* FOOTER */}
+                                                                        <div className="pt-4 border-t text-[10px] text-gray-400 flex justify-between">
+                                                                            <span>* Stock Holding represents cumulative balance. Activity charts represent selected day only.</span>
+                                                                            <span>Page 1 of 1</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
-                                                    <div className="mt-4">
-                                                        <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
-                                                            <Camera size={20}/> Share Image
-                                                        </button>
+
+                                                    <div className="mt-4 flex justify-end gap-2">
+                                                         <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download PDF</button>
                                                     </div>
                                                 </div>
                                             </div>
