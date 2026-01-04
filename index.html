@@ -561,7 +561,7 @@
                     category: expenseCategory,
                     amount: parseFloat(expenseAmount),
                     note: expenseNote,
-                    trip_id: 0 // Changed to standard snake_case to fix "column not found"
+                    tripID: 0 // Changed default to satisfy database NOT NULL constraint
                 };
 
                 // Optimistic Update: Add to UI immediately
@@ -572,12 +572,12 @@
                 try {
                     const { error } = await supabase.from('var_truck_expenses').insert([newExpense]);
                     if (error) {
-                        // If standard snake_case failed, try camelCase as fallback (retry logic)
-                         if (error.message.includes('column "trip_id" does not exist')) {
-                             console.warn("Retrying with tripID...");
+                         // Fallback retry logic for column case sensitivity
+                         if (error.message && (error.message.includes('column "tripID" does not exist') || error.message.includes('not-null'))) {
+                             console.warn("Retrying with trip_id...");
                              const retryExpense = { ...newExpense };
-                             delete retryExpense.trip_id;
-                             retryExpense.tripID = 0; // Try tripID
+                             delete retryExpense.tripID;
+                             retryExpense.trip_id = 0; 
                              const { error: retryError } = await supabase.from('var_truck_expenses').insert([retryExpense]);
                              if (retryError) throw retryError;
                          } else {
@@ -1511,229 +1511,431 @@
                                             {activeTab === 'records' && (
                                                 <div className="mt-4">
                                                     <button onClick={handleStockSnapshot} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700">
-                                                        <Camera size={20}/> Share Image / షేర్
+                                                        <Camera size={20}/> Share Image
                                                     </button>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* --- DIRECT ENTRY / EDIT MODAL --- */}
-                                        {showDirectEntry && (
-                                            <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-                                                <div className="bg-white w-full max-w-md p-4 rounded-xl animate-slide-up flex flex-col max-h-[90vh] shadow-2xl">
-                                                    <div className="flex justify-between items-center mb-4 pb-2 border-b">
-                                                        <h3 className="font-bold text-gray-800 flex items-center gap-2"><FilePlus size={20}/> {editingTripId ? "Edit Record / రికార్డు సవరించండి" : "Direct Entry / నేరుగా నమోదు"}</h3>
-                                                        <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="text-gray-500 p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
-                                                    </div>
-
-                                                    <div className="space-y-3 overflow-y-auto flex-1">
-                                                        {/* Date & Mode */}
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Date / తేదీ</label>
-                                                                <input type="date" value={directData.date} onChange={e => setDirectData({...directData, date: e.target.value})} className="w-full border p-2 rounded text-sm font-bold"/>
+                                        {activeTab === 'records' && (
+                                            <div className="flex-1 space-y-3 overflow-y-auto">
+                                                {savedTrips.length === 0 && <div className="text-center text-gray-400 text-xs italic py-10">No records found.</div>}
+                                                {savedTrips
+                                                    .slice(0, visibleRecords)
+                                                    .map(t => (
+                                                    <div key={t.id} className={`border rounded-lg p-3 hover:bg-gray-50 text-xs ${t.operationMode === 'Sales' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500'}`}>
+                                                        <div className="flex justify-between items-start mb-2 cursor-pointer" onClick={() => setExpandedTripId(expandedTripId === t.id ? null : t.id)}>
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-gray-700">{t.tripDate}</span>
+                                                                <span className="text-[10px] text-gray-400">{t.customerName || 'Unknown'}</span>
+                                                                {t.isDirectEntry && <span className="inline-block mt-1 px-1 py-0.5 bg-purple-100 text-purple-800 rounded text-[9px] font-bold w-fit">DIRECT</span>}
                                                             </div>
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Mode / విధానం</label>
-                                                                <select value={directData.mode} onChange={e => setDirectData({...directData, mode: e.target.value})} className="w-full border p-2 rounded text-sm font-bold bg-white">
-                                                                    <option value="Purchase">Purchase / కొనుగోలు</option>
-                                                                    <option value="Sales">Sales / అమ్మకాలు</option>
-                                                                </select>
+                                                            <div className="text-right">
+                                                                <div className={`font-bold text-lg leading-none ${t.operationMode === 'Sales' ? 'text-blue-600' : 'text-green-600'}`}>{t.operationMode === 'Sales' ? '-' : '+'}{t.totalBoxes}</div>
+                                                                <span className="font-mono bg-gray-200 px-1.5 rounded text-[9px] mt-1 inline-block">#{t.referenceId || '---'}</span>
                                                             </div>
                                                         </div>
 
-                                                        {/* Ref & Party */}
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Ref / Bill No / బిల్లు నం.</label>
-                                                                <input type="text" value={directData.refId} onChange={e => setDirectData({...directData, refId: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="#123"/>
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Party Name / పార్టీ పేరు</label>
-                                                                <input type="text" value={directData.partyName} onChange={e => setDirectData({...directData, partyName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Supplier/Customer Name"/>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Amount & Driver */}
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">
-                                                                    {directData.mode === 'Sales' ? 'Amount Received / స్వీకరించిన మొత్తం' : 'Amount Given / ఇచ్చిన మొత్తం'}
-                                                                </label>
-                                                                <div className="relative">
-                                                                    <div className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400">₹</div>
-                                                                    <input 
-                                                                        type="number" 
-                                                                        value={directData.amount} 
-                                                                        onChange={e => setDirectData({...directData, amount: e.target.value})} 
-                                                                        className="w-full border p-2 pl-5 rounded text-sm font-bold" 
-                                                                        placeholder="0.00"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div>
-                                                                <label className="block text-[10px] font-bold text-gray-400 uppercase">Driver / Notes / డ్రైవర్ / గమనికలు</label>
-                                                                <input type="text" value={directData.driverName} onChange={e => setDirectData({...directData, driverName: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="Optional / ఐచ్ఛికం"/>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Items List */}
-                                                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                                            <label className="block text-[10px] font-bold text-gray-400 mb-2 uppercase">Items List / సరుకుల జాబితా</label>
-                                                            {directData.items.length === 0 && <div className="text-center text-xs text-gray-400 italic mb-2">No items added yet / ఇంకా ఏ సరుకులు జోడించలేదు</div>}
-                                                            
-                                                            <div className="space-y-2 mb-3">
-                                                                {directData.items.map((item, idx) => (
-                                                                    <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border shadow-sm text-xs">
-                                                                        <div className="flex flex-col">
-                                                                            <span className="font-bold text-gray-700">{item.name}</span>
-                                                                            <span className="text-[10px] text-gray-400">{(item.boxes * 35) + item.looseKg} kg total</span>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="flex flex-col items-end mr-2">
-                                                                                <span className="font-mono font-bold bg-gray-100 px-1.5 py-0.5 rounded">{item.boxes} Bx</span>
-                                                                                {item.looseKg > 0 && <span className="text-[9px] text-orange-600">+{item.looseKg} kg</span>}
+                                                        {expandedTripId === t.id && (
+                                                            <div className="mt-2 pt-2 border-t border-gray-100 animate-fade-in">
+                                                                <div className="text-[10px] font-bold text-gray-400 mb-1 uppercase">Trip Breakdown</div>
+                                                                {t.detailedItems ? (
+                                                                    <div className="overflow-x-auto">
+                                                                        <table className="w-full text-xs text-left mb-2">
+                                                                            <thead className="bg-gray-50 text-gray-500">
+                                                                                <tr>
+                                                                                    <th className="p-1">Item</th>
+                                                                                    <th className="p-1 text-center">Box</th>
+                                                                                    <th className="p-1 text-center">Loose</th>
+                                                                                    <th className="p-1 text-right">Total Kg</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {t.detailedItems.map((item, idx) => (
+                                                                                    <tr key={idx} className="border-b last:border-0">
+                                                                                        <td className="p-1 font-bold">{item.name}</td>
+                                                                                        <td className="p-1 text-center">{item.boxes}</td>
+                                                                                        <td className="p-1 text-center text-gray-400">{item.looseKg > 0 ? item.looseKg : '-'}</td>
+                                                                                        <td className="p-1 text-right font-mono">{item.totalWeight}</td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="grid grid-cols-2 gap-1">
+                                                                        {t.summary ? Object.entries(t.summary).map(([item, count]) => {
+                                                                            if (item.startsWith('__')) return null;
+                                                                            return (
+                                                                            <div key={item} className="flex justify-between bg-gray-50 px-2 py-1 rounded">
+                                                                                <span className="text-gray-600">{item}</span>
+                                                                                <span className="font-bold">{count}</span>
                                                                             </div>
-                                                                            <button onClick={() => removeDirectItem(idx)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                            
-                                                            {/* Input Row */}
-                                                            <div className="flex flex-col gap-2 bg-white p-2 rounded border border-blue-100">
-                                                                <input list="item-suggestions" type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="Item Name / ఐటమ్ పేరు (e.g. Rohu)"/>
-                                                                <div className="flex gap-2">
-                                                                    <div className="flex-1">
-                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">No. Boxes / పెట్టెల సంఖ్య</label>
-                                                                        <input type="number" value={newItemBoxes} onChange={e => setNewItemBoxes(e.target.value)} className="w-full border p-2 rounded text-xs font-bold" placeholder="0"/>
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <label className="text-[9px] text-gray-400 font-bold uppercase">Loose Kg / విడిగా (కేజీలు)</label>
-                                                                        <input type="number" value={newItemLooseKg} onChange={e => setNewItemLooseKg(e.target.value)} className="w-full border p-2 rounded text-xs" placeholder="0"/>
-                                                                    </div>
-                                                                    <div className="flex items-end">
-                                                                        <button onClick={addItemToDirect} className="h-[34px] bg-green-500 text-white px-4 rounded hover:bg-green-600 font-bold flex items-center justify-center"><Plus size={18}/></button>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-[10px] text-right text-gray-400 italic">Total: {((parseInt(newItemBoxes)||0)*35 + (parseFloat(newItemLooseKg)||0))} Kg</div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* NEW: ASSOCIATED EXPENSES SECTION */}
-                                                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
-                                                            <label className="block text-[10px] font-bold text-orange-800 mb-2 uppercase flex items-center gap-1"><Wallet size={10}/> Associated Expenses / అనుబంధ ఖర్చులు</label>
-                                                            
-                                                            {tempExpenses.length > 0 && (
-                                                                <div className="space-y-1 mb-3">
-                                                                    {tempExpenses.map(exp => (
-                                                                        <div key={exp.id} className="flex justify-between items-center bg-white px-2 py-1 rounded border text-xs">
-                                                                            <span className="text-gray-600">{exp.category}</span>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="font-bold">₹{exp.amount}</span>
-                                                                                <button onClick={() => removeTempExpense(exp.id)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-
-                                                            <div className="flex gap-2">
-                                                                <select value={tempExpenseCategory} onChange={e => setTempExpenseCategory(e.target.value)} className="border p-1 rounded text-xs bg-white flex-1">
-                                                                    {['Transport', 'Labour', 'Ice', 'Driver Beta', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}
-                                                                </select>
-                                                                <input type="number" value={tempExpenseAmount} onChange={e => setTempExpenseAmount(e.target.value)} className="w-20 border p-1 rounded text-xs" placeholder="Amount"/>
-                                                                <button onClick={addTempExpense} className="bg-orange-500 text-white px-2 rounded hover:bg-orange-600"><Plus size={16}/></button>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-4 grid grid-cols-2 gap-3">
-                                                            <button onClick={() => { setShowDirectEntry(false); setTempExpenses([]); }} className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-bold text-sm">Cancel / రద్దు</button>
-                                                            <button onClick={() => handleDirectSave(false)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-blue-700">{editingTripId ? "Update Record / అప్‌డేట్" : "Save Record / సేవ్ చేయండి"}</button>
-                                                        </div>
-                                                        <button onClick={handleDirectShare} className="mt-3 w-full bg-green-600 text-white py-3 rounded-lg font-bold text-sm shadow-lg hover:bg-green-700 flex items-center justify-center gap-2">
-                                                            <Share2 size={18}/> Save & Share Image / సేవ్ & షేర్
-                                                        </button>
-
-                                                        {/* HIDDEN RECEIPT TEMPLATE FOR CAPTURE */}
-                                                        <div ref={directEntryCaptureRef} className="absolute left-[-9999px] top-0 w-[400px] bg-white p-6 text-black font-sans border border-gray-300">
-                                                            <div className="text-center border-b-2 border-black pb-2 mb-4">
-                                                                <h2 className="text-xl font-black uppercase">Transaction Receipt</h2>
-                                                                <div className="text-sm text-gray-600">{directData.mode === 'Sales' ? 'Sales / అమ్మకాలు' : 'Purchase / కొనుగోలు'}</div>
-                                                            </div>
-                                                            <div className="flex justify-between text-xs mb-1">
-                                                                <span className="text-gray-500">Date:</span>
-                                                                <span className="font-bold">{directData.date}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-xs mb-1">
-                                                                <span className="text-gray-500">Ref No:</span>
-                                                                <span className="font-bold">{directData.refId || '-'}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-xs mb-4">
-                                                                <span className="text-gray-500">Party:</span>
-                                                                <span className="font-bold uppercase text-sm">{directData.partyName}</span>
-                                                            </div>
-
-                                                            <table className="w-full text-xs mb-4 border-collapse">
-                                                                <thead>
-                                                                    <tr className="border-b border-black text-left">
-                                                                        <th className="py-1">Item</th>
-                                                                        <th className="py-1 text-center">Bx</th>
-                                                                        <th className="py-1 text-center">Loose</th>
-                                                                        <th className="py-1 text-right">Total Kg</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {directData.items.map((item, i) => (
-                                                                        <tr key={i} className="border-b border-gray-200">
-                                                                            <td className="py-1">{item.name}</td>
-                                                                            <td className="py-1 text-center">{item.boxes}</td>
-                                                                            <td className="py-1 text-center">{item.looseKg || '-'}</td>
-                                                                            <td className="py-1 text-right">{(item.boxes * 35) + (item.looseKg || 0)}</td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                                <tfoot>
-                                                                    <tr className="font-bold border-t border-black">
-                                                                        <td className="py-2">Total</td>
-                                                                        <td className="py-2 text-center">{directData.items.reduce((s, i) => s + (Number(i.boxes)||0), 0)}</td>
-                                                                        <td className="py-2 text-center">{directData.items.reduce((s, i) => s + (Number(i.looseKg)||0), 0)}</td>
-                                                                        <td className="py-2 text-right">{directData.items.reduce((s, i) => s + ((Number(i.boxes)||0)*35 + (Number(i.looseKg)||0)), 0)}</td>
-                                                                    </tr>
-                                                                </tfoot>
-                                                            </table>
-
-                                                            {directData.amount && (
-                                                                <div className="flex justify-between items-center bg-gray-100 p-2 rounded mb-2">
-                                                                    <span className="text-xs font-bold uppercase">{directData.mode === 'Sales' ? 'Received' : 'Given'}:</span>
-                                                                    <span className="text-lg font-black">₹{directData.amount}</span>
-                                                                </div>
-                                                            )}
-
-                                                            {tempExpenses.length > 0 && (
-                                                                <div className="mb-2 border-t pt-2">
-                                                                    <div className="text-[10px] font-bold uppercase mb-1">Expenses:</div>
-                                                                    {tempExpenses.map(e => (
-                                                                        <div key={e.id} className="flex justify-between text-[10px]">
-                                                                            <span>{e.category}</span>
-                                                                            <span>₹{e.amount}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-
-                                                            <div className="mt-4 pt-2 border-t border-gray-300 flex justify-between items-end">
-                                                                <div className="text-[9px] text-gray-400">
-                                                                    Generated by<br/>Nellore Truck Loader
-                                                                </div>
-                                                                {directData.driverName && (
-                                                                    <div className="text-xs font-bold text-right">
-                                                                        <div className="text-[9px] text-gray-400 font-normal">Driver/Note</div>
-                                                                        {directData.driverName}
+                                                                        )}) : <div className="text-gray-400 italic">No details</div>}
                                                                     </div>
                                                                 )}
+                                                                <div className="flex justify-end mt-2 gap-2">
+                                                                    <button onClick={(e) => { e.stopPropagation(); openEditRecord(t); }} className="text-blue-600 text-[10px] flex items-center gap-1 hover:bg-blue-50 px-2 py-1 rounded"><Pencil size={12}/> Edit</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); deleteTrip(t.id); }} className="text-red-500 text-[10px] flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded"><Trash2 size={12}/> Delete</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {visibleRecords < savedTrips.length && (
+                                                    <button onClick={() => setVisibleRecords(prev => prev + 20)} className="w-full py-2 text-xs font-bold text-gray-500 bg-gray-100 rounded hover:bg-gray-200">Show More Records</button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* --- DAILY REPORT MODAL --- */}
+                                        {showReportModal && (
+                                            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                                                <div className="bg-white w-full max-w-4xl p-4 rounded-xl shadow-2xl flex flex-col max-h-[95vh]">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="font-bold text-lg">Report Preview</h3>
+                                                        <button onClick={() => setShowReportModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
+                                                    </div>
+                                                    
+                                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
+                                                        {/* REPORT CONTAINER FOR CAPTURE */}
+                                                        {/* UPDATED: Added min-w-[800px] to ensure 3-column layout has enough width without shrinking fonts */}
+                                                        <div ref={reportCaptureRef} className="bg-white p-6 w-full min-w-[800px] max-w-3xl shadow-lg text-sm text-gray-800">
+                                                            <div className="text-center border-b-2 border-gray-300 pb-4 mb-4">
+                                                                <h1 className="text-2xl font-black uppercase text-gray-800">Daily Activity Report</h1>
+                                                                <div className="text-gray-500 font-bold mt-1">{reportDate}</div>
+                                                            </div>
+                                                            
+                                                            {(() => {
+                                                                const stats = getDailyReportStats(reportDate);
+                                                                
+                                                                // Logic to split Sales if too long
+                                                                const salesThreshold = 8;
+                                                                const isSalesSplit = stats.sales.length > salesThreshold;
+                                                                
+                                                                const salesPart1 = isSalesSplit ? stats.sales.slice(0, Math.ceil(stats.sales.length / 2)) : stats.sales;
+                                                                const salesPart2 = isSalesSplit ? stats.sales.slice(Math.ceil(stats.sales.length / 2)) : [];
+
+                                                                return (
+                                                                    <div className={`grid gap-4 ${isSalesSplit ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                                                                        {/* LEFT: PURCHASE */}
+                                                                        <div className="flex flex-col border-r border-gray-300 pr-4">
+                                                                            <h2 className="text-center font-bold bg-green-100 text-green-800 py-1 mb-2 uppercase">Purchase</h2>
+                                                                            <div className="space-y-3 flex-1">
+                                                                                {stats.purchases.length === 0 && <div className="text-center text-gray-400 italic py-4">No purchases</div>}
+                                                                                {stats.purchases.map((p, idx) => (
+                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                            <span>{p.name}</span>
+                                                                                            <span className="text-green-700">{p.totalBoxes} Bx <span className="text-[10px] text-gray-400">({p.totalLoose}kg)</span></span>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            {p.items.map((it, i) => (
+                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                    <span>{it.name}</span>
+                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                        {/* AMOUNT DISPLAY (Replaces Notes) */}
+                                                                                        {p.totalAmount > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
+                                                                                                <span className="font-bold text-gray-500">Amount Given:</span>
+                                                                                                <span className="font-bold text-green-700">₹{p.totalAmount}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {/* NOTES DISPLAY (Only if no amount, or additional context needed - here showing if notes exist) */}
+                                                                                        {(!p.totalAmount || p.totalAmount === 0) && p.notes && p.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                {p.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                     </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                            <div className="mt-4 pt-2 border-t-2 border-green-200">
+                                                                                <div className="flex justify-between text-lg font-black text-green-900">
+                                                                                    <span>Total In:</span>
+                                                                                    <div className="text-right">
+                                                                                        <div>{stats.totalInBoxes} Boxes</div>
+                                                                                        <div className="text-xs opacity-50">+{stats.totalInLoose} Kg Loose</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* RIGHT: SALES PART 1 */}
+                                                                        <div className={`flex flex-col ${isSalesSplit ? 'border-r border-gray-300 pr-2 pl-2' : 'pl-4'}`}>
+                                                                            <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">{isSalesSplit ? 'Sales (1)' : 'Sales'}</h2>
+                                                                            <div className="space-y-3 flex-1">
+                                                                                {salesPart1.length === 0 && <div className="text-center text-gray-400 italic py-4">No sales</div>}
+                                                                                {salesPart1.map((s, idx) => (
+                                                                                    <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                        <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                            <span>{s.name}</span>
+                                                                                            <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                        </div>
+                                                                                        <div className="space-y-0.5">
+                                                                                            {s.items.map((it, i) => (
+                                                                                                <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                    <span>{it.name}</span>
+                                                                                                    <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                        {/* AMOUNT DISPLAY (Replaces Notes) */}
+                                                                                        {s.totalAmount > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
+                                                                                                <span className="font-bold text-gray-500">Amount Received:</span>
+                                                                                                <span className="font-bold text-blue-700">₹{s.totalAmount}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {/* NOTES DISPLAY */}
+                                                                                        {(!s.totalAmount || s.totalAmount === 0) && s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                            <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                     <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                        <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                     </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                            {/* If NOT split, show total here */}
+                                                                            {!isSalesSplit && (
+                                                                                <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                    <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                        <span>Total Out:</span>
+                                                                                        <div className="text-right">
+                                                                                            <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                            <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* RIGHT: SALES PART 2 (Only if split) */}
+                                                                        {isSalesSplit && (
+                                                                            <div className="flex flex-col pl-2">
+                                                                                <h2 className="text-center font-bold bg-blue-100 text-blue-800 py-1 mb-2 uppercase">Sales (2)</h2>
+                                                                                <div className="space-y-3 flex-1">
+                                                                                    {salesPart2.map((s, idx) => (
+                                                                                        <div key={idx} className="border border-gray-200 rounded p-2">
+                                                                                            <div className="flex justify-between font-bold border-b border-gray-100 pb-1 mb-1">
+                                                                                                <span>{s.name}</span>
+                                                                                                <span className="text-blue-700">{s.totalBoxes} Bx <span className="text-[10px] text-gray-400">({s.totalLoose}kg)</span></span>
+                                                                                            </div>
+                                                                                            <div className="space-y-0.5">
+                                                                                                {s.items.map((it, i) => (
+                                                                                                    <div key={i} className="flex justify-between text-xs text-gray-600">
+                                                                                                        <span>{it.name}</span>
+                                                                                                        <span>{it.boxes} Bx {it.looseKg > 0 && `+${it.looseKg}kg`}</span>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                            {/* AMOUNT DISPLAY */}
+                                                                                            {s.totalAmount > 0 && (
+                                                                                                <div className="mt-1.5 pt-1 border-t border-gray-100 flex justify-between items-center text-xs">
+                                                                                                    <span className="font-bold text-gray-500">Amount Received:</span>
+                                                                                                    <span className="font-bold text-blue-700">₹{s.totalAmount}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                            {/* NOTES DISPLAY */}
+                                                                                            {(!s.totalAmount || s.totalAmount === 0) && s.notes && s.notes.filter(n => n !== 'Direct Entry').length > 0 && (
+                                                                                                <div className="mt-1.5 pt-1 border-t border-gray-100">
+                                                                                                    {s.notes.filter(n => n !== 'Direct Entry').map((note, nIdx) => (
+                                                                                                        <div key={nIdx} className="text-[10px] text-gray-500 italic flex items-start gap-1">
+                                                                                                            <span className="opacity-70">📝</span> <span>{note}</span>
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                                <div className="mt-4 pt-2 border-t-2 border-blue-200">
+                                                                                    <div className="flex justify-between text-lg font-black text-blue-900">
+                                                                                        <span>Total Out:</span>
+                                                                                        <div className="text-right">
+                                                                                            <div>{stats.totalOutBoxes} Boxes</div>
+                                                                                            <div className="text-xs opacity-50">+{stats.totalOutLoose} Kg Loose</div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                            
+                                                            {/* FOOTER: EXPENSE SUMMARY */}
+                                                            <div className="mt-8 border-t-4 border-gray-800 pt-6">
+                                                                <h2 className="text-left font-black text-xl text-gray-800 mb-4 flex items-center gap-2 uppercase tracking-wide">
+                                                                    <span className="bg-orange-500 text-white px-2 py-1 rounded text-sm">₹</span> Expense Report
+                                                                </h2>
+                                                                
+                                                                {getDailyReportStats(reportDate).totalExpenseAmount > 0 ? (
+                                                                    <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                                                                        <tfoot className="bg-orange-50 font-black text-lg text-orange-900 border-t-2 border-orange-200">
+                                                                            <tr>
+                                                                                <td colSpan="2" className="p-3 text-right uppercase">Total Expenses</td>
+                                                                                <td className="p-3 text-right">₹{getDailyReportStats(reportDate).totalExpenseAmount}</td>
+                                                                            </tr>
+                                                                        </tfoot>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="p-6 text-center bg-gray-50 rounded border border-gray-200 text-gray-400 italic">No expenses recorded for this date.</div>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-xs text-gray-400 uppercase tracking-widest">
+                                                                <span>Nellore Truck Loader App</span>
+                                                                <span>Generated: {new Date().toLocaleString()}</span>
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                    
+                                                    <div className="mt-4 flex justify-end gap-2">
+                                                        <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download PDF</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* --- VISUAL REPORT MODAL --- */}
+                                        {showVisualReportModal && (
+                                            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                                                <div className="bg-white w-full max-w-5xl p-4 rounded-xl shadow-2xl flex flex-col max-h-[95vh]">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><BarChart3 className="text-blue-600"/> Visual Report</h3>
+                                                        <button onClick={() => setShowVisualReportModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
+                                                    </div>
+
+                                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
+                                                        {/* VISUAL REPORT CANVAS */}
+                                                        <div ref={visualReportCaptureRef} className="bg-white p-8 w-[800px] shadow-2xl text-gray-800">
+                                                            {/* Header */}
+                                                            <div className="flex justify-between items-end border-b-2 border-gray-800 pb-4 mb-6">
+                                                                <div>
+                                                                    <h1 className="text-3xl font-black uppercase text-gray-900 tracking-tight">Daily Balance Report</h1>
+                                                                    <div className="text-sm font-bold text-gray-500 mt-1 flex items-center gap-2"><Calendar size={14}/> {new Date(reportDate).toDateString()}</div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className="text-xs text-gray-400 uppercase font-bold tracking-widest">Nellore Truck Loader</div>
+                                                                    <div className="text-xs text-gray-400">Automated Report</div>
+                                                                </div>
+                                                            </div>
+
+                                                            {(() => {
+                                                                const stats = getDailyReportStats(reportDate);
+                                                                // Prepare Chart Data for Day
+                                                                const dayItems = new Set([...stats.purchases.map(p=>p.name), ...stats.sales.map(s=>s.name)]);
+                                                                const chartData = Array.from(dayItems).map(item => {
+                                                                    const p = stats.purchases.find(x => x.name === item);
+                                                                    const s = stats.sales.find(x => x.name === item);
+                                                                    return {
+                                                                        label: item,
+                                                                        in: p ? p.totalBoxes : 0,
+                                                                        out: s ? s.totalBoxes : 0
+                                                                    };
+                                                                }).sort((a,b) => (b.in + b.out) - (a.in + a.out)); // Sort by activity
+
+                                                                // Prepare Stock Composition Data (Global Stock)
+                                                                const stockColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+                                                                const stockData = Object.entries(stockTotals.itemStats).map(([item, stat], idx) => ({
+                                                                    label: item,
+                                                                    value: stat.in.boxes - stat.out.boxes,
+                                                                    color: stockColors[idx % stockColors.length]
+                                                                })).filter(d => d.value > 0);
+
+                                                                return (
+                                                                    <div className="space-y-8">
+                                                                        {/* KPI CARDS */}
+                                                                        <div className="grid grid-cols-3 gap-4">
+                                                                            <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                                                                                <div className="text-xs font-bold text-green-600 uppercase mb-1">Total Inward</div>
+                                                                                <div className="text-3xl font-black text-green-800">{stats.totalInBoxes} <span className="text-sm font-normal text-green-600">Box</span></div>
+                                                                            </div>
+                                                                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                                                                <div className="text-xs font-bold text-blue-600 uppercase mb-1">Total Outward</div>
+                                                                                <div className="text-3xl font-black text-blue-800">{stats.totalOutBoxes} <span className="text-sm font-normal text-blue-600">Box</span></div>
+                                                                            </div>
+                                                                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                                                                <div className="text-xs font-bold text-gray-500 uppercase mb-1">Net Movement</div>
+                                                                                <div className={`text-3xl font-black ${stats.totalInBoxes - stats.totalOutBoxes >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
+                                                                                    {stats.totalInBoxes - stats.totalOutBoxes >= 0 ? '+' : ''}{stats.totalInBoxes - stats.totalOutBoxes}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* CHARTS SECTION */}
+                                                                        <div className="grid grid-cols-2 gap-8">
+                                                                            {/* Bar Chart */}
+                                                                            <div className="bg-white border rounded-xl p-4 shadow-sm">
+                                                                                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                                                                                    <h3 className="font-bold text-gray-700 flex items-center gap-2"><BarChart3 size={16}/> Daily Activity</h3>
+                                                                                    <div className="flex gap-2 text-[10px] font-bold uppercase">
+                                                                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-green-500 rounded-sm"></div> In</span>
+                                                                                        <span className="flex items-center gap-1"><div className="w-2 h-2 bg-blue-500 rounded-sm"></div> Out</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                {chartData.length > 0 ? <SimpleBarChart data={chartData} /> : <div className="text-center py-10 text-gray-300 italic">No activity today</div>}
+                                                                            </div>
+
+                                                                            {/* Pie Chart */}
+                                                                            <div className="bg-white border rounded-xl p-4 shadow-sm">
+                                                                                <div className="mb-4 border-b pb-2">
+                                                                                    <h3 className="font-bold text-gray-700 flex items-center gap-2"><BoxIcon size={16}/> Current Stock Holding</h3>
+                                                                                </div>
+                                                                                <SimpleDonutChart data={stockData} />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* DETAILED TABLE */}
+                                                                        <div>
+                                                                            <h3 className="font-bold text-gray-800 mb-2 uppercase text-sm border-l-4 border-gray-800 pl-2">Item-wise Breakdown</h3>
+                                                                            <table className="w-full text-sm border border-gray-200">
+                                                                                <thead className="bg-gray-100 text-gray-600 font-bold uppercase text-xs">
+                                                                                    <tr>
+                                                                                        <th className="p-2 text-left border-r">Item</th>
+                                                                                        <th className="p-2 text-right border-r text-green-700">Inward</th>
+                                                                                        <th className="p-2 text-right border-r text-blue-700">Outward</th>
+                                                                                        <th className="p-2 text-right">Net</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody className="divide-y divide-gray-100">
+                                                                                    {chartData.map((d, i) => (
+                                                                                        <tr key={i} className="hover:bg-gray-50">
+                                                                                            <td className="p-2 font-bold text-gray-700 border-r">{d.label}</td>
+                                                                                            <td className="p-2 text-right text-green-700 border-r">{d.in > 0 ? d.in : '-'}</td>
+                                                                                            <td className="p-2 text-right text-blue-700 border-r">{d.out > 0 ? d.out : '-'}</td>
+                                                                                            <td className="p-2 text-right font-bold text-gray-800">{d.in - d.out > 0 ? `+${d.in - d.out}` : d.in - d.out}</td>
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </div>
+
+                                                                        {/* FOOTER */}
+                                                                        <div className="pt-4 border-t text-[10px] text-gray-400 flex justify-between">
+                                                                            <span>* Stock Holding represents cumulative balance. Activity charts represent selected day only.</span>
+                                                                            <span>Page 1 of 1</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mt-4 flex justify-end gap-2">
+                                                         <button onClick={handleReportCapture} className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow hover:bg-blue-700 flex items-center gap-2"><FilePdf size={20}/> Download PDF</button>
                                                     </div>
                                                 </div>
                                             </div>
