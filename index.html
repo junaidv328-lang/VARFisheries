@@ -13,7 +13,6 @@
     
     <!-- PDF Generation Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Import Map with Supabase SDK -->
     <script type="importmap">
@@ -916,76 +915,6 @@
                 }
             };
 
-            const itemReportRef = useRef(null); 
-
-            // --- PDF REPORT GENERATOR (ITEM WISE) ---
-            const generateItemWiseReport = async () => {
-                if (!stockTotals || Object.keys(stockTotals.itemStats).length === 0) return alert("No items to report.");
-                if (!window.html2canvas || !window.jspdf || !window.Chart) return alert("Libraries loading... please wait.");
-
-                try {
-                    // 1. Prepare Data for Chart
-                    const sortedItems = Object.entries(stockTotals.itemStats)
-                        .sort((a,b) => (b[1].in.boxes - b[1].out.boxes) - (a[1].in.boxes - a[1].out.boxes))
-                        .slice(0, 8); // Top 8 items
-                    
-                    const labels = sortedItems.map(x => x[0]);
-                    const balances = sortedItems.map(x => x[1].in.boxes - x[1].out.boxes);
-                    const bgColors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#71B37C'];
-
-                    // 2. Render Chart to Hidden Canvas
-                    const ctx = document.getElementById('balanceChart').getContext('2d');
-                    
-                    // Destroy existing chart if any
-                    const existingChart = Chart.getChart("balanceChart");
-                    if (existingChart) existingChart.destroy();
-
-                    const newChart = new Chart(ctx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: labels,
-                            datasets: [{
-                                data: balances,
-                                backgroundColor: bgColors,
-                                borderWidth: 1
-                            }]
-                        },
-                        options: {
-                            responsive: false,
-                            animation: false, // Important for capture
-                            plugins: {
-                                legend: { display: false }
-                            }
-                        }
-                    });
-
-                    // Wait longer for chart render
-                    await new Promise(r => setTimeout(r, 500));
-
-                    // 3. Convert Chart to Image and inject into HTML
-                    const chartUrl = document.getElementById('balanceChart').toDataURL();
-                    document.getElementById('chartImg').src = chartUrl;
-
-                    // 4. Capture Report Wrapper
-                    const element = itemReportRef.current;
-                    const canvas = await window.html2canvas(element, { scale: 2, useCORS: true, logging: false });
-                    const imgData = canvas.toDataURL('image/png');
-
-                    // 5. Generate PDF
-                    const doc = new window.jspdf.jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-                    const imgProps = doc.getImageProperties(imgData);
-                    const pdfWidth = doc.internal.pageSize.getWidth();
-                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                    
-                    doc.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                    doc.save(`Item_Balance_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-
-                } catch (e) {
-                    console.error(e);
-                    alert("Report generation failed: " + e.message);
-                }
-            };
-            
             // DATA PREPARATION FOR REPORT
             const getDailyReportStats = (targetDate) => {
                 const purchases = {};
@@ -1412,13 +1341,7 @@
                                     <p className="text-xs text-gray-500 mb-3">Generate a visual report of Purchase vs Sales for a specific day.</p>
                                     <div className="flex gap-2">
                                         <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="border p-2 rounded text-sm flex-1"/>
-                                        <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center gap-2 justify-center"><FilePdf size={16}/> Daily Report (PDF)</button>
-                                    </div>
-                                    <div className="mt-3 pt-3 border-t border-gray-200">
-                                        <p className="text-xs text-gray-500 mb-2">Detailed Stock Balance Overview (All Time)</p>
-                                        <button onClick={generateItemWiseReport} className="w-full bg-blue-600 text-white px-4 py-3 rounded font-bold text-sm hover:bg-blue-700 flex items-center gap-2 justify-center shadow-sm">
-                                            <BarChart3 size={16}/> Download Item Wise Balance Report (PDF)
-                                        </button>
+                                        <button onClick={() => setShowReportModal(true)} className="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-purple-700 flex items-center gap-2 justify-center"><FilePdf size={16}/> Download PDF Report</button>
                                     </div>
                                 </div>
 
@@ -1758,74 +1681,7 @@
                                                         <button onClick={() => setShowReportModal(false)} className="bg-gray-200 p-2 rounded-full hover:bg-gray-300"><X size={20}/></button>
                                                     </div>
                                                     
-                                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center relative">
-                                                        
-                                                        {/* --- HIDDEN PDF REPORT CONTAINER --- */}
-                                                        <div className="hidden">
-                                                            <canvas id="balanceChart" width="400" height="400"></canvas>
-                                                            <div ref={itemReportRef} className="bg-white p-8 w-[800px] text-gray-800 font-sans" style={{ position: 'absolute', top: -9999, left: -9999 }}>
-                                                                {/* Header */}
-                                                                <div className="flex justify-between items-end border-b-2 border-gray-800 pb-4 mb-6">
-                                                                    <div>
-                                                                        <h1 className="text-3xl font-black uppercase tracking-wider text-gray-900">Item Balance Report</h1>
-                                                                        <div className="text-sm font-bold text-gray-500 mt-1">Generated: {new Date().toLocaleDateString()}</div>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                         <div className="text-xs uppercase font-bold text-gray-400">Total Stock Value</div>
-                                                                         <div className="text-2xl font-black text-gray-800">{Object.values(stockTotals.itemStats).reduce((sum, s) => sum + (s.in.boxes - s.out.boxes), 0)} Boxes</div>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Top Items Chart Section */}
-                                                                 <div className="mb-8 flex gap-8 items-center">
-                                                                    <div className="w-[250px] h-[250px] relative">
-                                                                         <img id="chartImg" src="" alt="Chart" className="w-full h-full object-contain" />
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <h3 className="font-bold text-lg mb-2 text-gray-700">Stock Summary</h3>
-                                                                        <div className="grid grid-cols-2 gap-4 text-sm">
-                                                                            <div className="bg-green-50 p-3 rounded border border-green-100">
-                                                                                <div className="text-xs font-bold text-green-800 uppercase">Total Inward</div>
-                                                                                <div className="text-xl font-bold text-green-600">{stockTotals.purchased} <span className="text-xs text-gray-400">Box</span></div>
-                                                                            </div>
-                                                                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                                                                <div className="text-xs font-bold text-blue-800 uppercase">Total Outward</div>
-                                                                                <div className="text-xl font-bold text-blue-600">{stockTotals.sold} <span className="text-xs text-gray-400">Box</span></div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Detailed Table */}
-                                                                <table className="w-full text-xs text-left border-collapse mb-8">
-                                                                    <thead>
-                                                                        <tr className="bg-gray-100 border-b-2 border-gray-300 uppercase text-[10px] font-bold text-gray-600">
-                                                                            <th className="p-3">Item Name</th>
-                                                                            <th className="p-3 text-right text-green-700">In (Purchased)</th>
-                                                                            <th className="p-3 text-right text-blue-700">Out (Sold)</th>
-                                                                            <th className="p-3 text-right text-gray-800">Balance</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {Object.entries(stockTotals.itemStats).sort((a,b) => (b[1].in.boxes - b[1].out.boxes) - (a[1].in.boxes - a[1].out.boxes)).map(([item, stats], idx) => {
-                                                                            const bal = stats.in.boxes - stats.out.boxes;
-                                                                            return (
-                                                                                <tr key={item} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                                                                    <td className="p-3 font-bold text-gray-700">{item}</td>
-                                                                                    <td className="p-3 text-right text-green-600 font-mono">{stats.in.boxes}</td>
-                                                                                    <td className="p-3 text-right text-blue-600 font-mono">{stats.out.boxes}</td>
-                                                                                    <td className="p-3 text-right font-black text-gray-800">{bal}</td>
-                                                                                </tr>
-                                                                            );
-                                                                        })}
-                                                                    </tbody>
-                                                                </table>
-                                                                
-                                                                <div className="text-center text-[10px] text-gray-400 mt-8 border-t pt-2">
-                                                                    Detailed Item Wise Balance Report • VAR Truck App
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                    <div className="flex-1 overflow-auto bg-gray-100 p-4 rounded border flex justify-center">
                                                         {/* REPORT CONTAINER FOR CAPTURE */}
                                                         {/* UPDATED: Added min-w-[800px] to ensure 3-column layout has enough width without shrinking fonts */}
                                                         <div ref={reportCaptureRef} className="bg-white p-6 w-full min-w-[800px] max-w-3xl shadow-lg text-sm text-gray-800">
